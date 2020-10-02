@@ -39,6 +39,7 @@
 #include <libavutil/channel_layout.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/version.h>
+#include <libavutil/hwcontext.h>
 
 #ifdef VDPAU
 #  include <libavcodec/vdpau.h>
@@ -138,8 +139,15 @@ struct producer_avformat_s
 #endif
 	int autorotate;
 	int is_audio_synchronizing;
+
+	AVBufferRef* hw_device_ctx;
+	AVFrame* sw_video_frame;
+	int eof;
 };
 typedef struct producer_avformat_s *producer_avformat;
+
+static enum AVPixelFormat HW_PIX_FMT = AV_PIX_FMT_VAAPI;
+static enum AVHWDeviceType HW_DEVICE_TYPE = AV_HWDEVICE_TYPE_VAAPI;
 
 // Forward references.
 static int list_components( char* file );
@@ -542,7 +550,7 @@ static char* parse_url( mlt_profile profile, const char* URL, AVInputFormat **fo
 		// Truncate protocol string
 		url[0] = 0;
 		++url;
-		mlt_log_debug( NULL, "%s: protocol=%s resource=%s\n", __FUNCTION__, protocol, url );
+		mlt_log_verbose( NULL, "%s: protocol=%s resource=%s\n", __FUNCTION__, protocol, url );
 
 		// Lookup the format
 		*format = av_find_input_format( protocol );
@@ -624,6 +632,8 @@ static enum AVPixelFormat pick_pix_fmt( enum AVPixelFormat pix_fmt )
 	case AV_PIX_FMT_BAYER_RGGB16LE:
 		return AV_PIX_FMT_RGB24;
 #endif
+	case AV_PIX_FMT_VAAPI:
+		return AV_PIX_FMT_YUV420P;
 	default:
 		return AV_PIX_FMT_YUV422P;
 	}
@@ -775,6 +785,8 @@ static int producer_open(producer_avformat self, mlt_profile profile, const char
 	// Return an error code (0 == no error)
 	int error = 0;
 	mlt_properties properties = MLT_PRODUCER_PROPERTIES( self->parent );
+
+	self->eof = 0;
 
 	if ( !self->is_mutex_init )
 	{
@@ -1027,7 +1039,7 @@ static void find_first_pts( producer_avformat self, int video_index )
 			// Finding PTS of first video key frame
 			if ( ( pkt.flags & AV_PKT_FLAG_KEY ) && self->first_pts == AV_NOPTS_VALUE )
 			{
-				mlt_log_debug( MLT_PRODUCER_SERVICE(self->parent),
+				mlt_log_verbose( MLT_PRODUCER_SERVICE(self->parent),
 					"first_pts %"PRId64" dts %"PRId64" pts_dts_delta %d\n",
 					pkt.pts, pkt.dts, (int)(pkt.pts - pkt.dts) );
 				if ( pkt.dts != AV_NOPTS_VALUE && pkt.dts < 0 )
@@ -1099,7 +1111,7 @@ static int seek_video( producer_avformat self, mlt_position position,
 				timestamp -= 2 / av_q2d( self->video_time_base );
 			if ( timestamp < 0 )
 				timestamp = 0;
-			mlt_log_debug( MLT_PRODUCER_SERVICE(producer), "seeking timestamp %"PRId64" position " MLT_POSITION_FMT " expected "MLT_POSITION_FMT" last_pos %"PRId64"\n",
+			mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), "seeking timestamp %"PRId64" position " MLT_POSITION_FMT " expected "MLT_POSITION_FMT" last_pos %"PRId64"\n",
 				timestamp, position, self->video_expected, self->last_position );
 
 			// Seek to the timestamp
@@ -1289,7 +1301,7 @@ static int sliced_h_pix_fmt_conv_proc( int id, int idx, int jobs, void* cookie )
 	if ( AV_PIX_FMT_YUV420P == ctx->dst_format )
 		dst_v_chr_pos = ( !interlaced ) ? 128 : ( !field ) ? 64 : 192;
 
-	mlt_log_debug( NULL, "%s:%d: [id=%d, idx=%d, jobs=%d], interlaced=%d, field=%d, slices=%d, mul=%d, h=%d, slice_w=%d, slice_x=%d ctx->src_desc=[log2_chroma_h=%d, log2_chroma_w=%d], src_v_chr_pos=%d, dst_v_chr_pos=%d\n",
+	mlt_log_verbose( NULL, "%s:%d: [id=%d, idx=%d, jobs=%d], interlaced=%d, field=%d, slices=%d, mul=%d, h=%d, slice_w=%d, slice_x=%d ctx->src_desc=[log2_chroma_h=%d, log2_chroma_w=%d], src_v_chr_pos=%d, dst_v_chr_pos=%d\n",
 		__FUNCTION__, __LINE__, id, idx, jobs, interlaced, field, slices, mul, h, slice_w, slice_x, ctx->src_desc->log2_chroma_h, ctx->src_desc->log2_chroma_w, src_v_chr_pos, dst_v_chr_pos );
 
 	if ( slice_w <= 0 )
@@ -1362,7 +1374,7 @@ static int convert_image( producer_avformat self, AVFrame *frame, uint8_t *buffe
 
 	mlt_log_timings_begin();
 
-	mlt_log_debug( MLT_PRODUCER_SERVICE(self->parent), "%s @ %dx%d space %d->%d\n",
+	mlt_log_verbose( MLT_PRODUCER_SERVICE(self->parent), "%s @ %dx%d space %d->%d\n",
 		mlt_image_format_name( *format ),
 		width, height, self->yuv_colorspace, profile->colorspace );
 
@@ -1720,7 +1732,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 			}
 			else
 #endif
-			yuv_colorspace = convert_image( self, self->video_frame, *buffer, codec_context->pix_fmt,
+			yuv_colorspace = convert_image( self, self->video_frame, *buffer, self->video_frame->format,
 				format, *width, *height, &alpha );
 			mlt_properties_set_int( frame_properties, "colorspace", yuv_colorspace );
 			got_picture = 1;
@@ -1731,10 +1743,6 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 		int ret = 0;
 		int64_t int_position = 0;
 		int decode_errors = 0;
-
-		// Construct an AVFrame for YUV422 conversion
-		if ( !self->video_frame )
-			self->video_frame = av_frame_alloc();
 
 		while( ret >= 0 && !got_picture )
 		{
@@ -1801,7 +1809,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					if ( int_position == self->last_position )
 						int_position = self->last_position + 1;
 				}
-				mlt_log_debug( MLT_PRODUCER_SERVICE(producer),
+				mlt_log_verbose( MLT_PRODUCER_SERVICE(producer),
 					"V pkt.pts %"PRId64" pkt.dts %"PRId64" req_pos %"PRId64" cur_pos %"PRId64" pkt_pos %"PRId64"\n",
 					self->pkt.pts, self->pkt.dts, req_position, self->current_position, int_position );
 
@@ -1818,7 +1826,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				self->last_position = int_position;
 
 				// Decode the image
-				if ( must_decode  || int_position >= req_position || !self->pkt.data )
+				if ( !self->eof && (must_decode  || int_position >= req_position || !self->pkt.data) )
 				{
 #ifdef VDPAU
 					if ( self->vdpau )
@@ -1833,8 +1841,38 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					codec_context->reordered_opaque = int_position;
 					if ( int_position >= req_position )
 						codec_context->skip_loop_filter = AVDISCARD_NONE;
-					ret = avcodec_decode_video2( codec_context, self->video_frame, &got_picture, &self->pkt );
-					mlt_log_debug( MLT_PRODUCER_SERVICE(producer), "decoded packet with size %d => %d\n", self->pkt.size, ret );
+					
+					char errstr[1000];
+
+					if (self->video_frame)
+						av_frame_free(&self->video_frame);
+					if (self->sw_video_frame)
+						av_frame_free(&self->sw_video_frame);
+
+					self->video_frame = av_frame_alloc();
+					self->sw_video_frame = av_frame_alloc();
+
+					do {
+						// mlt_log_warning(NULL, "send packet\n");
+						if ((ret = avcodec_send_packet(codec_context, &self->pkt)) < 0)
+						{
+							if (ret == AVERROR_EOF) {
+								self->eof = 1;
+							}
+							av_strerror(ret, errstr, 1000);
+							mlt_log_error(NULL, "avcodec_send_packet() failed %s\n", errstr);
+						}
+						// mlt_log_warning(NULL, "receive frame\n");
+						if ((ret = avcodec_receive_frame(codec_context, self->video_frame)) < 0) {
+							if (ret == AVERROR_EOF) {
+								self->eof = 1;
+							}
+							av_strerror(ret, errstr, 1000);
+							mlt_log_error(NULL, "avcodec_receive_frame() failed %s\n", errstr);
+						}
+					} while (ret == AVERROR(EAGAIN));
+
+					mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), "decoded packet with size %d => %d\n", self->pkt.size, ret );
 					// Note: decode may fail at the beginning of MPEGfile (B-frames referencing before first I-frame), so allow a few errors.
 					if ( ret < 0 )
 					{
@@ -1847,6 +1885,22 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					}
 					else
 					{
+						if (self->hw_device_ctx && self->video_frame->format == HW_PIX_FMT) {
+							ret = av_hwframe_transfer_data(self->sw_video_frame, self->video_frame, 0);
+							if(ret < 0) {
+								av_strerror(ret, errstr, 1000);
+								mlt_log_error(NULL, "av_hwframe_transfer_data() failed %s\n", errstr);
+								return -1;
+							}
+							av_frame_copy_props(self->sw_video_frame, self->video_frame);
+							self->sw_video_frame->width = self->video_frame->width;
+							self->sw_video_frame->height = self->video_frame->height;
+
+							av_frame_unref(self->video_frame);
+							av_frame_move_ref(self->video_frame, self->sw_video_frame);
+
+            }
+						got_picture = 1;
 						decode_errors = 0;
 					}
 				}
@@ -1880,7 +1934,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				{
 					ret = -1;
 				}
-				mlt_log_debug( MLT_PRODUCER_SERVICE(producer), " got_pic %d key %d ret %d pkt_pos %"PRId64"\n",
+				mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), " got_pic %d key %d ret %d pkt_pos %"PRId64"\n",
 							   got_picture, self->pkt.flags & AV_PKT_FLAG_KEY, ret, int_position );
 			}
 
@@ -1948,7 +2002,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					}
 					else
 #endif
-					yuv_colorspace = convert_image( self, self->video_frame, *buffer, codec_context->pix_fmt,
+					yuv_colorspace = convert_image( self, self->video_frame, *buffer, self->video_frame->format,
 						format, *width, *height, &alpha );
 					mlt_properties_set_int( frame_properties, "colorspace", yuv_colorspace );
 					self->top_field_first |= self->video_frame->top_field_first;
@@ -2067,6 +2121,17 @@ static void apply_properties( void *obj, mlt_properties properties, int flags )
 	}
 }
 
+static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
+																				const enum AVPixelFormat *pix_fmts)
+{
+	const enum AVPixelFormat *p;
+	for (p = pix_fmts; *p != -1; p++)
+		if (*p == HW_PIX_FMT)
+			return *p;
+	mlt_log_warning(NULL, "get_hw_format() failed\n");
+	return *pix_fmts;
+}
+
 /** Initialize the video codec context.
  */
 
@@ -2079,36 +2144,18 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 		AVStream *stream = self->video_format->streams[ index ];
 
 		// Get codec context
-		AVCodecContext *codec_context = stream->codec;
+		AVCodecContext *codec_context = NULL;
+		AVCodec *codec = avcodec_find_decoder(stream->codecpar->codec_id);
 
-		// Find the codec
-		AVCodec *codec = avcodec_find_decoder( codec_context->codec_id );
-		if ( mlt_properties_get( properties, "vcodec" ) ) {
-			if ( !( codec = avcodec_find_decoder_by_name( mlt_properties_get( properties, "vcodec" ) ) ) )
-				codec = avcodec_find_decoder( codec_context->codec_id );
-		} else if ( codec_context->codec_id == AV_CODEC_ID_VP9 ) {
-			if ( !( codec = avcodec_find_decoder_by_name( "libvpx-vp9" ) ) )
-				codec = avcodec_find_decoder( codec_context->codec_id );
-		} else if ( codec_context->codec_id == AV_CODEC_ID_VP8 ) {
-			if ( !( codec = avcodec_find_decoder_by_name( "libvpx" ) ) )
-				codec = avcodec_find_decoder( codec_context->codec_id );
+    if (!(codec_context = avcodec_alloc_context3(codec)))
+        return AVERROR(ENOMEM);
+
+    if (avcodec_parameters_to_context(codec_context, stream->codecpar) < 0) {
+			mlt_log_warning(NULL, "avcodec_parameters_to_context() failed\n");
+			return -1;
 		}
-#ifdef VDPAU
-		if ( codec_context->codec_id == AV_CODEC_ID_H264 )
-		{
-			if ( ( codec = avcodec_find_decoder_by_name( "h264_vdpau" ) ) )
-			{
-				if ( vdpau_init( self ) )
-				{
-					self->video_codec = codec_context;
-					if ( !vdpau_decoder_init( self ) )
-						vdpau_fini( self );
-				}
-			}
-			if ( !self->vdpau )
-				codec = avcodec_find_decoder( codec_context->codec_id );
-		}
-#endif
+
+		stream->codec = codec_context;
 
 		// Initialise multi-threading
 		int thread_count = mlt_properties_get_int( properties, "threads" );
@@ -2116,29 +2163,35 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 			thread_count = atoi( getenv( "MLT_AVFORMAT_THREADS" ) );
 		if ( thread_count >= 0 )
 			codec_context->thread_count = thread_count;
+		int found_hw_pix_fmt = 0;
+
+		for (int i = 0;; i++) {
+			const AVCodecHWConfig *config = avcodec_get_hw_config(codec, i);
+			if (!config) break;
+
+			if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+				config->device_type == HW_DEVICE_TYPE && config->pix_fmt == HW_PIX_FMT) {
+				found_hw_pix_fmt = 1;
+				break;
+			}
+		}
+
+		codec_context->framerate = av_guess_frame_rate(NULL, stream, NULL);
+		if (found_hw_pix_fmt && av_hwdevice_ctx_create(&self->hw_device_ctx, HW_DEVICE_TYPE, "/dev/dri/renderD128", NULL, 0) >= 0) {
+			codec_context->get_format = get_hw_format;
+			codec_context->hw_device_ctx = av_buffer_ref(self->hw_device_ctx);
+			mlt_log_warning(NULL, "av_hwdevice_ctx_create() success %d\n", codec_context->pix_fmt);
+		} else {
+			mlt_log_warning(NULL, "av_hwdevice_ctx_create() failed\n");
+		}
 
 		// If we don't have a codec and we can't initialise it, we can't do much more...
 		pthread_mutex_lock( &self->open_mutex );
-		if ( codec && avcodec_open2( codec_context, codec, NULL ) >= 0 )
-		{
-			// Switch to the native vp8/vp9 decoder if not yuva420p
-			if ( codec_context->pix_fmt != AV_PIX_FMT_YUVA420P
-				 && !mlt_properties_get( properties, "vcodec" )
-				 && ( !strcmp(codec->name, "libvpx") || !strcmp(codec->name, "libvpx-vp9") ) )
-			{
-				codec = avcodec_find_decoder( codec_context->codec_id );
-				if ( codec && avcodec_open2( codec_context, codec, NULL ) < 0 ) {
-					self->video_index = -1;
-					pthread_mutex_unlock( &self->open_mutex );
-					return 0;
-				}
-			}
-			// Now store the codec with its destructor
+		if (avcodec_open2(codec_context, codec, NULL) >= 0) {
 			self->video_codec = codec_context;
-		}
-		else
-		{
+		} else {
 			// Remember that we can't use this later
+			mlt_log_warning(NULL, "initialization failed\n");
 			self->video_index = -1;
 			pthread_mutex_unlock( &self->open_mutex );
 			return 0;
@@ -2256,7 +2309,7 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 		}
 
 		self->full_luma = 0;
-		mlt_log_debug( MLT_PRODUCER_SERVICE(self->parent), "color_range %d\n", codec_context->color_range );
+		mlt_log_verbose( MLT_PRODUCER_SERVICE(self->parent), "color_range %d\n", codec_context->color_range );
 		if ( codec_context->color_range == AVCOL_RANGE_JPEG )
 			self->full_luma = 1;
 		if ( mlt_properties_get( properties, "set.force_full_luma" ) )
@@ -2546,7 +2599,7 @@ static int decode_audio( producer_avformat self, int *ignore, AVPacket pkt, int 
 		int64_t req_position = llrint( timecode * fps );
 		int64_t req_pts =      llrint( timecode / timebase );
 
-		mlt_log_debug( MLT_PRODUCER_SERVICE(self->parent),
+		mlt_log_verbose( MLT_PRODUCER_SERVICE(self->parent),
 			"A pkt.pts %"PRId64" pkt.dts %"PRId64" req_pos %"PRId64" cur_pos %"PRId64" pkt_pos %"PRId64"\n",
 			pkt.pts, pkt.dts, req_position, self->current_position, int_position );
 
@@ -3030,12 +3083,19 @@ static int producer_get_frame( mlt_producer producer, mlt_frame_ptr frame, int i
 
 static void producer_avformat_close( producer_avformat self )
 {
-	mlt_log_debug( NULL, "producer_avformat_close\n" );
+	mlt_log_verbose( NULL, "producer_avformat_close\n" );
 
 	// Cleanup av contexts
 	av_free_packet( &self->pkt );
-	av_free( self->video_frame );
+	if (self->video_frame)
+		av_free( self->video_frame );
+	if (self->sw_video_frame)
+		av_free( self->sw_video_frame );
 	av_free( self->audio_frame );
+
+	if (self->hw_device_ctx)
+		av_buffer_unref(&self->hw_device_ctx);
+
 	if ( self->is_mutex_init )
 		pthread_mutex_lock( &self->open_mutex );
 	int i;
