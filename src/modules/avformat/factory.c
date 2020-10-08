@@ -89,6 +89,7 @@ static void avformat_init( )
 		avformat_initialised = 1;
 		av_lockmgr_register( &avformat_lockmgr );
 		mlt_factory_register_for_clean_up( &avformat_lockmgr, unregister_lockmgr );
+		avcodec_register_all();
 		av_register_all( );
 #ifdef AVDEVICE
 		avdevice_register_all();
