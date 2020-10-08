@@ -26,12 +26,14 @@
 #include "mlt_frame.h"
 #include "mlt_profile.h"
 #include "mlt_log.h"
+#include "shared_memory.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <stdatomic.h>
+#include <libavutil/imgutils.h>
 
 /** Define this if you want an automatic deinterlace (if necessary) when the
  * consumer's producer is not running at normal speed.
@@ -77,6 +79,8 @@ typedef struct
 	int process_head;
 	atomic_int started;
 	pthread_t *threads; /**< used to deallocate all threads */
+	SharedMemory *shared_mem_frame;
+	SharedMemory *shared_mem_audio;
 }
 consumer_private;
 
@@ -884,6 +888,40 @@ static void *consumer_read_ahead_thread( void *arg )
 		{
 			samples = mlt_audio_calculate_frame_samples( priv->fps, priv->frequency, priv->aud_counter++ );
 			mlt_frame_get_audio( frame, &audio, &priv->audio_format, &priv->frequency, &priv->channels, &samples );
+
+
+			if (!priv->shared_mem_audio) {
+				char *preview_file = mlt_properties_get(properties, "preview_file");
+				if (preview_file) {
+					char vu_file[strlen(preview_file) + 5];
+					sprintf(vu_file, "%s.vu", preview_file);
+					priv->shared_mem_audio = create_shared_memory(vu_file, 1 << 10);
+				}
+			}
+
+			if (priv->shared_mem_audio) {
+				uint8_t audio_samples[priv->channels + 1]; // first byte is reserved for # of channels
+				audio_samples[0] = priv->channels;
+
+				if (priv->audio_format == mlt_audio_s16) {
+					int16_t *audio16 = (int16_t *)audio;
+					for (int i = 0; i < priv->channels; ++i)
+						audio_samples[i+1] = audio16[samples*i];
+				} else if (priv->audio_format == mlt_audio_s32) {
+					int32_t *audio32 = (int32_t *)audio;
+					for (int i = 0; i < priv->channels; ++i)
+						audio_samples[i+1] = (audio32[samples*i]);
+				} else {
+					mlt_log_debug(NULL, "invalid audio format %d\n", priv->audio_format);
+				}
+
+				if (write_shared_memory(priv->shared_mem_audio, (void *)audio_samples, priv->channels + 1)) {
+					mlt_log_warning(NULL, "failed to write to shared memory\n");
+				}
+				// for (int i = 0; i < priv->channels; ++i) {
+				// 	mlt_log_warning(NULL, "audio[%d]=%d; ", i, audio_samples[i]);
+				// }
+			}
 		}
 
 		// All non-normal playback frames should be shown
@@ -1618,6 +1656,49 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 		}
 	}
 
+	if (!priv->shared_mem_frame) {
+		char *preview_file = mlt_properties_get(properties, "preview_file");
+		if (preview_file) {
+			priv->shared_mem_frame = create_shared_memory(preview_file, 1 << 23);
+		}
+	}
+
+	if (priv->shared_mem_frame && frame) {
+		uint8_t *image;
+
+		int width = mlt_properties_get_int(properties, "width");
+		int height = mlt_properties_get_int(properties, "height");
+		int bpp;
+		mlt_image_format_size(priv->image_format, width, height, &bpp);
+		uint32_t size = width*height*bpp;
+		mlt_frame_get_image(frame, &image, &priv->image_format, &width, &height, 1);
+
+		// for (int i = 0; i < size; i+=2) {
+		// 	buffer[i] = image[i+1];
+		// 	buffer[i+1] = image[i];
+		// }
+		if (!image) {
+			mlt_log_warning(NULL, "failed to get image\n");
+		} else { 
+			void *data = malloc(3*sizeof(uint32_t) + size);
+			memcpy(data, (uint32_t *)&width, sizeof(uint32_t));
+			memcpy(data + sizeof(uint32_t), (uint32_t *)&height, sizeof(uint32_t));
+			memcpy(data + 2*sizeof(uint32_t), (uint32_t *)&size, sizeof(uint32_t));
+
+			// for (int i = 0; i < size; i += 2) {  // reorder image bytes before copying
+			// 	((uint8_t *)data)[3*sizeof(uint32_t) + i] = image[i+1];
+			// 	((uint8_t *)data)[3*sizeof(uint32_t) + i + 1] = image[i];
+			// }
+
+			memcpy(data + 3*sizeof(uint32_t), image, size);
+
+			if (write_shared_memory(priv->shared_mem_frame, data, 3*sizeof(uint32_t) + size)) {
+				mlt_log_warning(NULL, "failed to write to shared memory\n");
+			}
+			free(data);
+		}
+	}
+
 	return frame;
 }
 
@@ -1734,6 +1815,9 @@ void mlt_consumer_close( mlt_consumer self )
 		else
 		{
 			consumer_private *priv = self->local;
+			
+			if (priv->shared_mem_frame)
+				dispose_shared_memory(priv->shared_mem_frame);
 
 			// Make sure it only gets called once
 			self->parent.close = NULL;
