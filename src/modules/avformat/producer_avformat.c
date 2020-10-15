@@ -142,7 +142,6 @@ struct producer_avformat_s
 
 	AVBufferRef* hw_device_ctx;
 	AVFrame* sw_video_frame;
-	int eof;
 };
 typedef struct producer_avformat_s *producer_avformat;
 
@@ -550,7 +549,7 @@ static char* parse_url( mlt_profile profile, const char* URL, AVInputFormat **fo
 		// Truncate protocol string
 		url[0] = 0;
 		++url;
-		mlt_log_verbose( NULL, "%s: protocol=%s resource=%s\n", __FUNCTION__, protocol, url );
+		mlt_log_debug( NULL, "%s: protocol=%s resource=%s\n", __FUNCTION__, protocol, url );
 
 		// Lookup the format
 		*format = av_find_input_format( protocol );
@@ -785,8 +784,6 @@ static int producer_open(producer_avformat self, mlt_profile profile, const char
 	// Return an error code (0 == no error)
 	int error = 0;
 	mlt_properties properties = MLT_PRODUCER_PROPERTIES( self->parent );
-
-	self->eof = 0;
 
 	if ( !self->is_mutex_init )
 	{
@@ -1039,7 +1036,7 @@ static void find_first_pts( producer_avformat self, int video_index )
 			// Finding PTS of first video key frame
 			if ( ( pkt.flags & AV_PKT_FLAG_KEY ) && self->first_pts == AV_NOPTS_VALUE )
 			{
-				mlt_log_verbose( MLT_PRODUCER_SERVICE(self->parent),
+				mlt_log_debug( MLT_PRODUCER_SERVICE(self->parent),
 					"first_pts %"PRId64" dts %"PRId64" pts_dts_delta %d\n",
 					pkt.pts, pkt.dts, (int)(pkt.pts - pkt.dts) );
 				if ( pkt.dts != AV_NOPTS_VALUE && pkt.dts < 0 )
@@ -1111,7 +1108,7 @@ static int seek_video( producer_avformat self, mlt_position position,
 				timestamp -= 2 / av_q2d( self->video_time_base );
 			if ( timestamp < 0 )
 				timestamp = 0;
-			mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), "seeking timestamp %"PRId64" position " MLT_POSITION_FMT " expected "MLT_POSITION_FMT" last_pos %"PRId64"\n",
+			mlt_log_debug( MLT_PRODUCER_SERVICE(producer), "seeking timestamp %"PRId64" position " MLT_POSITION_FMT " expected "MLT_POSITION_FMT" last_pos %"PRId64"\n",
 				timestamp, position, self->video_expected, self->last_position );
 
 			// Seek to the timestamp
@@ -1301,7 +1298,7 @@ static int sliced_h_pix_fmt_conv_proc( int id, int idx, int jobs, void* cookie )
 	if ( AV_PIX_FMT_YUV420P == ctx->dst_format )
 		dst_v_chr_pos = ( !interlaced ) ? 128 : ( !field ) ? 64 : 192;
 
-	mlt_log_verbose( NULL, "%s:%d: [id=%d, idx=%d, jobs=%d], interlaced=%d, field=%d, slices=%d, mul=%d, h=%d, slice_w=%d, slice_x=%d ctx->src_desc=[log2_chroma_h=%d, log2_chroma_w=%d], src_v_chr_pos=%d, dst_v_chr_pos=%d\n",
+	mlt_log_debug( NULL, "%s:%d: [id=%d, idx=%d, jobs=%d], interlaced=%d, field=%d, slices=%d, mul=%d, h=%d, slice_w=%d, slice_x=%d ctx->src_desc=[log2_chroma_h=%d, log2_chroma_w=%d], src_v_chr_pos=%d, dst_v_chr_pos=%d\n",
 		__FUNCTION__, __LINE__, id, idx, jobs, interlaced, field, slices, mul, h, slice_w, slice_x, ctx->src_desc->log2_chroma_h, ctx->src_desc->log2_chroma_w, src_v_chr_pos, dst_v_chr_pos );
 
 	if ( slice_w <= 0 )
@@ -1374,7 +1371,7 @@ static int convert_image( producer_avformat self, AVFrame *frame, uint8_t *buffe
 
 	mlt_log_timings_begin();
 
-	mlt_log_verbose( MLT_PRODUCER_SERVICE(self->parent), "%s @ %dx%d space %d->%d\n",
+	mlt_log_debug( MLT_PRODUCER_SERVICE(self->parent), "%s @ %dx%d space %d->%d\n",
 		mlt_image_format_name( *format ),
 		width, height, self->yuv_colorspace, profile->colorspace );
 
@@ -1809,7 +1806,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					if ( int_position == self->last_position )
 						int_position = self->last_position + 1;
 				}
-				mlt_log_verbose( MLT_PRODUCER_SERVICE(producer),
+				mlt_log_debug( MLT_PRODUCER_SERVICE(producer),
 					"V pkt.pts %"PRId64" pkt.dts %"PRId64" req_pos %"PRId64" cur_pos %"PRId64" pkt_pos %"PRId64"\n",
 					self->pkt.pts, self->pkt.dts, req_position, self->current_position, int_position );
 
@@ -1826,7 +1823,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				self->last_position = int_position;
 
 				// Decode the image
-				if ( !self->eof && (must_decode  || int_position >= req_position || !self->pkt.data) )
+				if (must_decode  || int_position >= req_position || !self->pkt.data)
 				{
 #ifdef VDPAU
 					if ( self->vdpau )
@@ -1856,23 +1853,17 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 						// mlt_log_warning(NULL, "send packet\n");
 						if ((ret = avcodec_send_packet(codec_context, &self->pkt)) < 0)
 						{
-							if (ret == AVERROR_EOF) {
-								self->eof = 1;
-							}
 							av_strerror(ret, errstr, 1000);
 							mlt_log_error(NULL, "avcodec_send_packet() failed %s\n", errstr);
 						}
 						// mlt_log_warning(NULL, "receive frame\n");
 						if ((ret = avcodec_receive_frame(codec_context, self->video_frame)) < 0) {
-							if (ret == AVERROR_EOF) {
-								self->eof = 1;
-							}
 							av_strerror(ret, errstr, 1000);
 							mlt_log_error(NULL, "avcodec_receive_frame() failed %s\n", errstr);
 						}
 					} while (ret == AVERROR(EAGAIN));
 
-					mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), "decoded packet with size %d => %d\n", self->pkt.size, ret );
+					mlt_log_debug( MLT_PRODUCER_SERVICE(producer), "decoded packet with size %d => %d\n", self->pkt.size, ret );
 					// Note: decode may fail at the beginning of MPEGfile (B-frames referencing before first I-frame), so allow a few errors.
 					if ( ret < 0 )
 					{
@@ -1933,7 +1924,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				{
 					ret = -1;
 				}
-				mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), " got_pic %d key %d ret %d pkt_pos %"PRId64"\n",
+				mlt_log_debug( MLT_PRODUCER_SERVICE(producer), " got_pic %d key %d ret %d pkt_pos %"PRId64"\n",
 							   got_picture, self->pkt.flags & AV_PKT_FLAG_KEY, ret, int_position );
 			}
 
@@ -2309,7 +2300,7 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 		}
 
 		self->full_luma = 0;
-		mlt_log_verbose( MLT_PRODUCER_SERVICE(self->parent), "color_range %d\n", codec_context->color_range );
+		mlt_log_debug( MLT_PRODUCER_SERVICE(self->parent), "color_range %d\n", codec_context->color_range );
 		if ( codec_context->color_range == AVCOL_RANGE_JPEG )
 			self->full_luma = 1;
 		if ( mlt_properties_get( properties, "set.force_full_luma" ) )
@@ -2599,7 +2590,7 @@ static int decode_audio( producer_avformat self, int *ignore, AVPacket pkt, int 
 		int64_t req_position = llrint( timecode * fps );
 		int64_t req_pts =      llrint( timecode / timebase );
 
-		mlt_log_verbose( MLT_PRODUCER_SERVICE(self->parent),
+		mlt_log_debug( MLT_PRODUCER_SERVICE(self->parent),
 			"A pkt.pts %"PRId64" pkt.dts %"PRId64" req_pos %"PRId64" cur_pos %"PRId64" pkt_pos %"PRId64"\n",
 			pkt.pts, pkt.dts, req_position, self->current_position, int_position );
 
@@ -3083,7 +3074,7 @@ static int producer_get_frame( mlt_producer producer, mlt_frame_ptr frame, int i
 
 static void producer_avformat_close( producer_avformat self )
 {
-	mlt_log_verbose( NULL, "producer_avformat_close\n" );
+	mlt_log_debug( NULL, "producer_avformat_close\n" );
 
 	// Cleanup av contexts
 	av_free_packet( &self->pkt );
