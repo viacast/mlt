@@ -167,6 +167,7 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 			!strcmp( argv[ i ], "-mix" ) ||
 			!strcmp( argv[ i ], "-filter" ) ||
 			!strcmp( argv[ i ], "-transition" ) ||
+			!strcmp( argv[ i ], "-run" ) ||
 			!strcmp( argv[ i ], "-blank" ) ) )
 		{
 			fprintf( stderr, "Argument missing for %s.\n", argv[ i ] );
@@ -241,6 +242,10 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 				producer = info.cut;
 				properties = MLT_PRODUCER_PROPERTIES( producer );
 			}
+		}
+		else if ( !strcmp( argv[ i ], "-run" ) )
+		{
+			system(argv[ ++i ]);
 		}
 		else if ( !strcmp( argv[ i ], "-split" ) )
 		{
