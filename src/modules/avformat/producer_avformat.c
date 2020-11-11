@@ -40,6 +40,7 @@
 #include <libavutil/imgutils.h>
 #include <libavutil/version.h>
 #include <libavutil/hwcontext.h>
+#include <libavcodec/packet.h>
 
 #ifdef VDPAU
 #  include <libavcodec/vdpau.h>
@@ -1823,7 +1824,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				self->last_position = int_position;
 
 				// Decode the image
-				if (must_decode  || int_position >= req_position || !self->pkt.data)
+				if ( must_decode  || int_position >= req_position || !self->pkt.data )
 				{
 #ifdef VDPAU
 					if ( self->vdpau )
@@ -1850,16 +1851,14 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					self->sw_video_frame = av_frame_alloc();
 
 					do {
-						// mlt_log_warning(NULL, "send packet\n");
 						if ((ret = avcodec_send_packet(codec_context, &self->pkt)) < 0)
 						{
-							av_strerror(ret, errstr, 1000);
-							mlt_log_error(NULL, "avcodec_send_packet() failed %s\n", errstr);
+							// av_strerror(ret, errstr, 1000);
+							// mlt_log_error(NULL, "avcodec_send_packet() failed %s\n", errstr);
 						}
-						// mlt_log_warning(NULL, "receive frame\n");
 						if ((ret = avcodec_receive_frame(codec_context, self->video_frame)) < 0) {
-							av_strerror(ret, errstr, 1000);
-							mlt_log_error(NULL, "avcodec_receive_frame() failed %s\n", errstr);
+							// av_strerror(ret, errstr, 1000);
+							// mlt_log_error(NULL, "avcodec_receive_frame() failed %s\n", errstr);
 						}
 					} while (ret == AVERROR(EAGAIN));
 
@@ -2061,7 +2060,15 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 	self->video_expected = position + 1;
 
 exit_get_image:
-
+	if (self->video_frame->nb_side_data) {
+		for (int i = 0; i < self->video_frame->nb_side_data; ++i) {
+			if ((*self->video_frame->side_data)[i].type == AV_FRAME_DATA_A53_CC) {
+				memcpy(frame->cc_side_data, (*self->video_frame->side_data)[i].data, (*self->video_frame->side_data)[i].size);
+				frame->cc_side_data_size = (*self->video_frame->side_data)[i].size;
+				break;
+			}
+		}
+	}
 	pthread_mutex_unlock( &self->video_mutex );
 
 	// Set the progressive flag
