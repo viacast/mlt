@@ -1891,6 +1891,17 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
             }
 						got_picture = 1;
 						decode_errors = 0;
+
+						if (self->video_frame->nb_side_data && !frame->cc_side_data_size) {
+							for (int i = 0; i < self->video_frame->nb_side_data; ++i) {
+								AVFrameSideData *sd = self->video_frame->side_data[i];
+								if (sd->type == AV_FRAME_DATA_A53_CC && sd->size) {
+									memcpy(frame->cc_side_data, sd->data, sd->size);
+									frame->cc_side_data_size = sd->size;
+									break;
+								}
+							}
+						}
 					}
 				}
 
@@ -2060,15 +2071,6 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 	self->video_expected = position + 1;
 
 exit_get_image:
-	if (self->video_frame->nb_side_data) {
-		for (int i = 0; i < self->video_frame->nb_side_data; ++i) {
-			if ((*self->video_frame->side_data)[i].type == AV_FRAME_DATA_A53_CC) {
-				memcpy(frame->cc_side_data, (*self->video_frame->side_data)[i].data, (*self->video_frame->side_data)[i].size);
-				frame->cc_side_data_size = (*self->video_frame->side_data)[i].size;
-				break;
-			}
-		}
-	}
 	pthread_mutex_unlock( &self->video_mutex );
 
 	// Set the progressive flag
@@ -2175,13 +2177,20 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 		}
 
 		codec_context->framerate = av_guess_frame_rate(NULL, stream, NULL);
-		if (found_hw_pix_fmt && av_hwdevice_ctx_create(&self->hw_device_ctx, HW_DEVICE_TYPE, "/dev/dri/renderD128", NULL, 0) >= 0) {
-			codec_context->get_format = get_hw_format;
-			codec_context->hw_device_ctx = av_buffer_ref(self->hw_device_ctx);
-			mlt_log_warning(NULL, "av_hwdevice_ctx_create() success %d\n", codec_context->pix_fmt);
+		if (found_hw_pix_fmt) {
+			int ret = av_hwdevice_ctx_create(&self->hw_device_ctx, HW_DEVICE_TYPE, "/dev/dri/renderD128", NULL, 0);
+			if (ret >= 0) {
+				codec_context->get_format = get_hw_format;
+				codec_context->hw_device_ctx = av_buffer_ref(self->hw_device_ctx);
+				mlt_log_warning(NULL, "av_hwdevice_ctx_create() success %d\n", codec_context->pix_fmt);
+			} else {
+				mlt_log_warning(NULL, "av_hwdevice_ctx_create() failed %d\n", ret);
+			}
 		} else {
-			mlt_log_warning(NULL, "av_hwdevice_ctx_create() failed\n");
+			mlt_log_warning(NULL, "failed to find hw_pix_fmt\n");
 		}
+
+		// mlt_log_warning(NULL, "scte104=%s\n", mlt_properties_get(properties, "scte104"));
 
 		// If we don't have a codec and we can't initialise it, we can't do much more...
 		pthread_mutex_lock( &self->open_mutex );
@@ -2819,6 +2828,7 @@ static int producer_get_audio( mlt_frame frame, void **buffer, mlt_audio_format 
 
 		// Allocate and set the frame's audio buffer
 		int size = mlt_audio_format_size( *format, *samples, *channels );
+		// mlt_log_warning(NULL, "format=%d;samples=%d;channels=%d;size=%d\n", *format, *samples, *channels, size);
 		*buffer = mlt_pool_alloc( size );
 		mlt_frame_set_audio( frame, *buffer, *format, size, mlt_pool_release );
 
@@ -3093,6 +3103,7 @@ static void producer_avformat_close( producer_avformat self )
 
 	if (self->hw_device_ctx)
 		av_buffer_unref(&self->hw_device_ctx);
+
 	if ( self->is_mutex_init )
 		pthread_mutex_lock( &self->open_mutex );
 	int i;

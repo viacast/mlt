@@ -83,10 +83,6 @@ public:
         _ancillary->AddRef();
         return S_OK;
 		}
-		virtual long STDMETHODCALLTYPE GetRowBytes (void)
-    {
-				return ((GetWidth() + 47) / 48) * 128;
-    }
     IDeckLinkVideoFrameAncillary *_ancillary;
 };
 
@@ -128,6 +124,7 @@ private:
 	mlt_deque                   m_aqueue;
 	pthread_mutex_t             m_aqueue_lock;
 	mlt_deque                   m_frames;
+	mlt_deque                   m_frames_interim;
 
 	pthread_mutex_t             m_op_lock;
 	pthread_mutex_t             m_op_arg_mutex;
@@ -189,6 +186,7 @@ public:
 		m_deckLink = NULL;
 		m_aqueue = mlt_deque_init();
 		m_frames = mlt_deque_init();
+		m_frames_interim = mlt_deque_init();
 		m_buffer = NULL;
 
 		// operation locks
@@ -215,6 +213,7 @@ public:
 
 		mlt_deque_close( m_aqueue );
 		mlt_deque_close( m_frames );
+		mlt_deque_close( m_frames_interim );
 
 		op(OP_EXIT, 0);
 		mlt_log_debug( getConsumer(), "%s: waiting for op thread\n", __FUNCTION__ );
@@ -477,10 +476,9 @@ protected:
 			m_deckLinkKeyer->Disable();
 		}
 
-		BMDVideoOutputFlags flags = bmdVideoOutputRP188 | bmdVideoOutputVITC | bmdVideoOutputVANC;
-		flags = bmdVideoOutputVANC;
-		// if (m_supports_vanc)
-		// 	flags |= bmdVideoOutputVANC;
+		BMDVideoOutputFlags flags = bmdVideoOutputRP188 | bmdVideoOutputVITC;
+		if (m_supports_vanc)
+			flags |= bmdVideoOutputVANC;
 		// Set the video output mode
 		if ( S_OK != m_deckLinkOutput->EnableVideoOutput( m_displayMode->GetDisplayMode(), flags ) )
 		{
@@ -511,6 +509,7 @@ protected:
 				mlt_log_error( getConsumer(), "%s: CreateVideoFrame (%d) failed\n", __FUNCTION__, i );
 				return false;
 			}
+
 			mlt_deque_push_back( m_frames, frame );
 		}
 
@@ -544,7 +543,10 @@ protected:
 		pthread_mutex_unlock( &m_aqueue_lock );
 
 		m_buffer = NULL;
-		while ( IDeckLinkMutableVideoFrame* frame = (IDeckLinkMutableVideoFrame*) mlt_deque_pop_back( m_frames ) )
+		IDeckLinkMutableVideoFrame* frame;
+		while ( frame = (IDeckLinkMutableVideoFrame*) mlt_deque_pop_back( m_frames ) )
+			SAFE_RELEASE( frame );
+		while ( frame = (IDeckLinkMutableVideoFrame*) mlt_deque_pop_back( m_frames_interim ) )
 			SAFE_RELEASE( frame );
 
 		// set running state is 0
@@ -667,9 +669,6 @@ protected:
 					}
 
 					/* Generate the full line taking into account all VANC packets on that line */
-					// uint16_t *out_line;
-					// int out_len;
-					// result = klvanc_generate_vanc_line(m_vanc_ctx, line, &out_line, &out_len, m_width);
 					result = klvanc_generate_vanc_line_v210(m_vanc_ctx, line, (uint8_t *) buf, m_width);
 					if (result) {
 							mlt_log_error(getConsumer(), "Failed to generate VANC line\n");
@@ -705,7 +704,7 @@ done:
 		int height = m_height;
 		DeckLinkVideoFrame* decklinkFrame =
 			static_cast<DeckLinkVideoFrame*>( mlt_deque_pop_front( m_frames ) );
-		
+
 		mlt_log_debug( getConsumer(), "%s: entering\n", __FUNCTION__ );
 
 		m_sliced_swab = mlt_properties_get_int( consumer_properties, "sliced_swab" );
@@ -827,8 +826,8 @@ done:
 				mlt_log_error( getConsumer(), "%s:%d: ScheduleVideoFrame failed, hr=%.8X \n", __FUNCTION__, __LINE__, unsigned(hr) );
 			}
 			else {
+				mlt_deque_push_back( m_frames_interim, decklinkFrame );
 				mlt_log_debug( getConsumer(), "%s: ScheduleVideoFrame SUCCESS\n", __FUNCTION__ );
-				mlt_deque_push_back( m_frames, decklinkFrame );
 			}
 		}
 	}
@@ -1005,7 +1004,9 @@ done:
 	{
 		mlt_log_debug( getConsumer(), "%s: ENTERING\n", __FUNCTION__ );
 
-		// mlt_deque_push_back( m_frames, completedFrame );
+		// mlt_deque_push_back(m_frames, completedFrame);
+		if (void *frame = mlt_deque_pop_front(m_frames_interim))
+			mlt_deque_push_back(m_frames, frame);
 
 		//  change priority of video callback thread
 		reprio( 1 );
