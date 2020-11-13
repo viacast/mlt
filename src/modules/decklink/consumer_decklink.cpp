@@ -63,6 +63,8 @@ static int swab_sliced( int id, int idx, int jobs, void* cookie )
 	return 0;
 };
 
+#define SCTE104_VANC_LINE 9
+
 class DeckLinkVideoFrame : public IDeckLinkMutableVideoFrame
 {
 public:
@@ -389,7 +391,7 @@ protected:
 			SAFE_RELEASE( deckLinkAttributes );
 		}
 
-		if (klvanc_context_create(&m_vanc_ctx) < 0) {
+		if (!m_vanc_ctx && klvanc_context_create(&m_vanc_ctx) < 0) {
         mlt_log_error(getConsumer(), "Cannot create VANC library context\n");
         return AVERROR(ENOMEM);
     }
@@ -528,6 +530,7 @@ protected:
 		mlt_log_debug( getConsumer(), "%s: starting\n", __FUNCTION__ );
 
     klvanc_context_destroy(m_vanc_ctx);
+		m_vanc_ctx = NULL;
 
 		// Stop the audio and video output streams immediately
 		if ( m_deckLinkOutput )
@@ -549,6 +552,8 @@ protected:
 		while ( frame = (IDeckLinkMutableVideoFrame*) mlt_deque_pop_back( m_frames_interim ) )
 			SAFE_RELEASE( frame );
 
+		SAFE_RELEASE(m_decklinkVideoConversion);
+
 		// set running state is 0
 		mlt_properties_set_int( properties, "running", 0 );
 
@@ -569,6 +574,54 @@ protected:
 		mlt_deque_push_back( m_aqueue, frame );
 		mlt_log_debug( getConsumer(), "%s:%d frame=%p, len=%d\n", __FUNCTION__, __LINE__, frame, mlt_deque_count( m_aqueue ));
 		pthread_mutex_unlock( &m_aqueue_lock );
+	}
+
+	int create_ancillary_data(DeckLinkVideoFrame *decklink_frame, BMDPixelFormat pixel_format) 
+	{
+		if (!m_supports_vanc)
+			return S_FALSE;
+		IDeckLinkVideoFrameAncillary *vanc;
+		if (decklink_frame->GetAncillaryData(&vanc) == S_FALSE) {
+			int result = m_deckLinkOutput->CreateAncillaryData(bmdFormat10BitYUV, &vanc);
+			if (result != S_OK) {
+					mlt_log_error(getConsumer(), "Failed to create vanc\n");
+					return S_FALSE;
+			}
+			decklink_frame->SetAncillaryData(vanc);
+		}
+		return S_OK;
+	}
+
+	void insert_vanc(IDeckLinkVideoFrameAncillary *vanc, struct klvanc_line_set_s *vanc_lines)
+	{
+			int result;
+			/* Now that we've got all the VANC lines in a nice orderly manner, generate the
+				final VANC sections for the Decklink output */
+			for (int i = 0; i < vanc_lines->num_lines; i++) {
+					struct klvanc_line_s *line = vanc_lines->lines[i];
+					int real_line;
+					void *buf;
+
+					if (!line)
+							break;
+
+					/* FIXME: include hack for certain Decklink cards which mis-represent
+						line numbers for pSF frames */
+					real_line = line->line_number;
+
+					result = vanc->GetBufferForVerticalBlankingLine(real_line, &buf);
+					if (result != S_OK) {
+							mlt_log_error(getConsumer(), "Failed to get VANC line %d: %d\n", real_line, result);
+							continue;
+					}
+
+					/* Generate the full line taking into account all VANC packets on that line */
+					result = klvanc_generate_vanc_line_v210(m_vanc_ctx, line, (uint8_t *) buf, m_width);
+					if (result) {
+							mlt_log_error(getConsumer(), "Failed to generate VANC line\n");
+							continue;
+					}
+			}
 	}
 
 	void construct_cc(mlt_frame frame, struct klvanc_line_set_s *vanc_lines)
@@ -630,10 +683,10 @@ protected:
 			}
 	}
 
-	int decklink_construct_vanc(mlt_frame frame, DeckLinkVideoFrame *decklink_frame)
+	int construct_vanc_cc(mlt_frame frame, DeckLinkVideoFrame *decklink_frame)
 	{
 			struct klvanc_line_set_s vanc_lines = { 0 };
-			int ret = 0, i;
+			int ret = 0, i, result;
 
 			if (!m_supports_vanc)
 					return 0;
@@ -641,55 +694,95 @@ protected:
 			construct_cc(frame, &vanc_lines);
 
 			IDeckLinkVideoFrameAncillary *vanc;
-			int result = m_deckLinkOutput->CreateAncillaryData(bmdFormat10BitYUV, &vanc);
+			result = decklink_frame->GetAncillaryData(&vanc);
+
 			if (result != S_OK) {
-					mlt_log_error(getConsumer(), "Failed to create vanc\n");
+					mlt_log_error(getConsumer(), "Failed to get vanc cc\n");
 					ret = AVERROR(EIO);
 					goto done;
 			}
 
-			/* Now that we've got all the VANC lines in a nice orderly manner, generate the
-				final VANC sections for the Decklink output */
-			for (i = 0; i < vanc_lines.num_lines; i++) {
-					struct klvanc_line_s *line = vanc_lines.lines[i];
-					int real_line;
-					void *buf;
-
-					if (!line)
-							break;
-
-					/* FIXME: include hack for certain Decklink cards which mis-represent
-						line numbers for pSF frames */
-					real_line = line->line_number;
-
-					result = vanc->GetBufferForVerticalBlankingLine(real_line, &buf);
-					if (result != S_OK) {
-							mlt_log_error(getConsumer(), "Failed to get VANC line %d: %d\n", real_line, result);
-							continue;
-					}
-
-					/* Generate the full line taking into account all VANC packets on that line */
-					result = klvanc_generate_vanc_line_v210(m_vanc_ctx, line, (uint8_t *) buf, m_width);
-					if (result) {
-							mlt_log_error(getConsumer(), "Failed to generate VANC line\n");
-							continue;
-					}
-
-					// klvanc_y10_to_v210(out_line, (uint8_t *) buf, out_len);
-					// free(out_line);
-			}
-
-			result = decklink_frame->SetAncillaryData(vanc);
+			insert_vanc(vanc, &vanc_lines);
 			vanc->Release();
-			if (result != S_OK) {
-					mlt_log_error(getConsumer(), "Failed to set vanc: %d", result);
-					ret = AVERROR(EIO);
-			}
 
 done:
 			for (i = 0; i < vanc_lines.num_lines; i++)
 					klvanc_line_free(vanc_lines.lines[i]);
 
+			return ret;
+	}
+
+	int construct_scte104(mlt_frame frame, DeckLinkVideoFrame *decklink_frame)
+	{
+			struct klvanc_line_set_s vanc_lines = { 0 };
+			struct klvanc_packet_scte_104_s *pkt;
+			struct klvanc_multiple_operation_message_operation *op;
+			int ret = 0, i, result;
+			uint16_t *words;
+			uint16_t wordCount;
+
+			if (!m_supports_vanc)
+					return S_FALSE;
+
+			IDeckLinkVideoFrameAncillary *vanc;
+			result = decklink_frame->GetAncillaryData(&vanc);
+
+			if (result != S_OK) {
+					mlt_log_error(getConsumer(), "Failed to get vanc scte104\n");
+					return AVERROR(EIO);
+			}
+
+			result = klvanc_alloc_SCTE_104(0xffff, &pkt);
+			if (result != S_OK) {
+					mlt_log_error(getConsumer(), "Failed to alloc scte104\n");
+					return AVERROR(EIO);
+			}
+
+			result =  klvanc_SCTE_104_Add_MOM_Op(pkt, MO_SPLICE_REQUEST_DATA, &op);
+			if (result != S_OK) {
+					mlt_log_error(getConsumer(), "Failed to add SCTE 104 op\n");
+					ret = AVERROR(EIO);
+					goto scte104_done;
+			}
+
+			op->sr_data.splice_insert_type = 0x02;
+			op->sr_data.splice_event_id = 0x1234;
+			op->sr_data.unique_program_id = 0x4567;
+			op->sr_data.pre_roll_time = 0;
+			op->sr_data.brk_duration = 300;
+			op->sr_data.avail_num = 1;
+			op->sr_data.avails_expected = 2;
+			op->sr_data.auto_return_flag = 1;
+
+			// result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
+			// if (result != S_OK) {
+			// 		mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
+			// 		ret = AVERROR(EIO);
+			// 		goto scte104_done;
+			// }
+
+			result = klvanc_convert_SCTE_104_to_words(m_vanc_ctx, pkt, &words, &wordCount);
+			if (result != S_OK)  {
+					mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
+					ret = AVERROR(EIO);
+					goto scte104_done;
+			}
+
+			ret = klvanc_line_insert(m_vanc_ctx, &vanc_lines, words, wordCount, SCTE104_VANC_LINE, 0);
+			if (ret != 0) {
+					mlt_log_error(getConsumer(), "VANC line insertion failed\n");
+					ret = AVERROR(EIO);
+					goto scte104_done;
+			}
+
+			insert_vanc(vanc, &vanc_lines);
+			vanc->Release();
+
+scte104_done:
+			for (i = 0; i < vanc_lines.num_lines; i++)
+					klvanc_line_free(vanc_lines.lines[i]);
+			if (pkt)
+					klvanc_free_SCTE_104(pkt);
 			return ret;
 	}
 
@@ -799,17 +892,19 @@ done:
 					mlt_properties_get_int( MLT_FRAME_PROPERTIES( frame ), "meta.attr.vitc.userbits" ));
 
 			DeckLinkVideoFrame* decklink10BitFrame;
-
-			if (decklinkFrame->GetPixelFormat() != bmdFormat10BitYUV) {
+			if (m_supports_vanc && m_decklinkVideoConversion && decklinkFrame->GetPixelFormat() != bmdFormat10BitYUV) {
 				if ( S_OK == m_deckLinkOutput->CreateVideoFrame( m_width, m_height,
-					((m_width + 47)/48) * 128, bmdFormat10BitYUV, bmdFrameFlagDefault, (IDeckLinkMutableVideoFrame **) &decklink10BitFrame ) )
+					((m_width + 47)/48) * 128, bmdFormat10BitYUV, bmdFrameFlagDefault, (IDeckLinkMutableVideoFrame **) &decklink10BitFrame ) && decklink10BitFrame )
 				{
 					int convert_result = m_decklinkVideoConversion->ConvertFrame(decklinkFrame, decklink10BitFrame);
 					mlt_log_debug(getConsumer(), "%s:%d: ConvertFrame %d\n", __FUNCTION__, __LINE__, convert_result);
 					if (convert_result != S_OK) {
 						decklink10BitFrame = nullptr;
 					} else {
-						decklink_construct_vanc(frame, decklink10BitFrame);
+						if (create_ancillary_data(decklink10BitFrame, bmdFormat10BitYUV) == S_OK) {
+							construct_vanc_cc(frame, decklink10BitFrame);
+							construct_scte104(frame, decklink10BitFrame);
+						}
 					}
 				} else {
 					mlt_log_error(getConsumer(), "%s:%d: CreateVideoFrame failed\n", __FUNCTION__, __LINE__);
