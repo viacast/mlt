@@ -141,6 +141,7 @@ struct producer_avformat_s
 	int autorotate;
 	int is_audio_synchronizing;
 
+	AVCodecContext* codec_context;
 	AVBufferRef* hw_device_ctx;
 	AVFrame* sw_video_frame;
 };
@@ -958,7 +959,9 @@ static void prepare_reopen( producer_avformat self )
 	if ( self->video_codec )
 		avcodec_close( self->video_codec );
 	self->video_codec = NULL;
-
+	if (self->hw_device_ctx)
+		av_buffer_unref(&self->hw_device_ctx);
+	self->hw_device_ctx = NULL;
 	if ( self->seekable && self->audio_format )
 		avformat_close_input( &self->audio_format );
 	if ( self->video_format )
@@ -1842,16 +1845,19 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					
 					char errstr[1000];
 
-					if (self->video_frame)
-						av_frame_free(&self->video_frame);
-					if (self->sw_video_frame)
-						av_frame_free(&self->sw_video_frame);
+					if (!self->video_frame)
+						self->video_frame = av_frame_alloc();
+					else
+						av_frame_unref(self->video_frame);
+					// ret = avcodec_decode_video2( codec_context, self->video_frame, &got_picture, &self->pkt );
 
-					self->video_frame = av_frame_alloc();
-					self->sw_video_frame = av_frame_alloc();
+					if (!self->sw_video_frame)
+						self->sw_video_frame = av_frame_alloc();
+					else
+						av_frame_unref(self->sw_video_frame);
 
 					do {
-						if ((ret = avcodec_send_packet(codec_context, &self->pkt)) < 0)
+					if ((ret = avcodec_send_packet(codec_context, &self->pkt)) < 0)
 						{
 							// av_strerror(ret, errstr, 1000);
 							// mlt_log_error(NULL, "avcodec_send_packet() failed %s\n", errstr);
@@ -2071,6 +2077,8 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 	self->video_expected = position + 1;
 
 exit_get_image:
+	av_frame_free(&self->video_frame);
+	av_frame_free(&self->sw_video_frame);
 	pthread_mutex_unlock( &self->video_mutex );
 
 	// Set the progressive flag
@@ -2143,17 +2151,18 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 		AVStream *stream = self->video_format->streams[ index ];
 
 		// Get codec context
-		AVCodecContext *codec_context = NULL;
 		AVCodec *codec = avcodec_find_decoder(stream->codecpar->codec_id);
 
-    if (!(codec_context = avcodec_alloc_context3(codec)))
-        return AVERROR(ENOMEM);
+    if (!self->codec_context && !(self->codec_context = avcodec_alloc_context3(codec))) {
+			return AVERROR(ENOMEM);
+		}
 
+		AVCodecContext *codec_context = self->codec_context;
     if (avcodec_parameters_to_context(codec_context, stream->codecpar) < 0) {
 			mlt_log_warning(NULL, "avcodec_parameters_to_context() failed\n");
 			return -1;
 		}
-
+	
 		avcodec_free_context(&stream->codec);
 		stream->codec = codec_context;
 
@@ -2178,6 +2187,8 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 
 		codec_context->framerate = av_guess_frame_rate(NULL, stream, NULL);
 		if (found_hw_pix_fmt) {
+			if (self->hw_device_ctx)
+				av_buffer_unref(&self->hw_device_ctx);
 			int ret = av_hwdevice_ctx_create(&self->hw_device_ctx, HW_DEVICE_TYPE, "/dev/dri/renderD128", NULL, 0);
 			if (ret >= 0) {
 				codec_context->get_format = get_hw_format;
@@ -2828,7 +2839,6 @@ static int producer_get_audio( mlt_frame frame, void **buffer, mlt_audio_format 
 
 		// Allocate and set the frame's audio buffer
 		int size = mlt_audio_format_size( *format, *samples, *channels );
-		// mlt_log_warning(NULL, "format=%d;samples=%d;channels=%d;size=%d\n", *format, *samples, *channels, size);
 		*buffer = mlt_pool_alloc( size );
 		mlt_frame_set_audio( frame, *buffer, *format, size, mlt_pool_release );
 
@@ -3103,7 +3113,6 @@ static void producer_avformat_close( producer_avformat self )
 
 	if (self->hw_device_ctx)
 		av_buffer_unref(&self->hw_device_ctx);
-
 	if ( self->is_mutex_init )
 		pthread_mutex_lock( &self->open_mutex );
 	int i;
