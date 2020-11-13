@@ -2077,8 +2077,10 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 	self->video_expected = position + 1;
 
 exit_get_image:
-	av_frame_free(&self->video_frame);
-	av_frame_free(&self->sw_video_frame);
+	if (self->video_frame)
+		av_frame_free(&self->video_frame);
+	if (self->sw_video_frame)
+		av_frame_free(&self->sw_video_frame);
 	pthread_mutex_unlock( &self->video_mutex );
 
 	// Set the progressive flag
