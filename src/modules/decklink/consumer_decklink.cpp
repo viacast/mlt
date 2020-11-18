@@ -580,16 +580,20 @@ protected:
 	{
 		if (!m_supports_vanc)
 			return S_FALSE;
+		int ret = S_OK;
 		IDeckLinkVideoFrameAncillary *vanc;
 		if (decklink_frame->GetAncillaryData(&vanc) == S_FALSE) {
-			int result = m_deckLinkOutput->CreateAncillaryData(bmdFormat10BitYUV, &vanc);
-			if (result != S_OK) {
+			ret = m_deckLinkOutput->CreateAncillaryData(bmdFormat10BitYUV, &vanc);
+			if (ret != S_OK) {
 					mlt_log_error(getConsumer(), "Failed to create vanc\n");
-					return S_FALSE;
+					goto exit_create_ancillary_data;
 			}
 			decklink_frame->SetAncillaryData(vanc);
 		}
-		return S_OK;
+exit_create_ancillary_data:
+		if (vanc)
+			vanc->Release();
+		return ret;
 	}
 
 	void insert_vanc(IDeckLinkVideoFrameAncillary *vanc, struct klvanc_line_set_s *vanc_lines)
