@@ -97,7 +97,7 @@ int mlt_producer_init( mlt_producer self, void *child )
 			mlt_properties_set_double( properties, "_speed", 1.0 );
 			mlt_properties_set_position( properties, "in", 0 );
 			char *e = getenv( "MLT_DEFAULT_PRODUCER_LENGTH" );
-			int p = e ? atoi( e ) : 15000;
+			int p = e ? atoi( e ) : 1;
 			mlt_properties_set_position( properties, "out", MAX(0, p - 1) );
 			mlt_properties_set_position( properties, "length", p );
 			mlt_properties_set( properties, "eof", "pause" );

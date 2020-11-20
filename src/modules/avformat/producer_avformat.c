@@ -144,6 +144,8 @@ struct producer_avformat_s
 	AVCodecContext* codec_context;
 	AVBufferRef* hw_device_ctx;
 	AVFrame* sw_video_frame;
+
+	char scte_104[2051];
 };
 typedef struct producer_avformat_s *producer_avformat;
 
@@ -1849,7 +1851,6 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 						self->video_frame = av_frame_alloc();
 					else
 						av_frame_unref(self->video_frame);
-					// ret = avcodec_decode_video2( codec_context, self->video_frame, &got_picture, &self->pkt );
 
 					if (!self->sw_video_frame)
 						self->sw_video_frame = av_frame_alloc();
@@ -1895,19 +1896,31 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 							av_frame_unref(self->video_frame);
 							av_frame_move_ref(self->video_frame, self->sw_video_frame);
             }
-						got_picture = 1;
-						decode_errors = 0;
-
-						if (self->video_frame->nb_side_data && !frame->cc_side_data_size) {
+						if (self->video_frame->nb_side_data && !mlt_properties_get(MLT_PRODUCER_PROPERTIES(self->parent), "meta.cc-size")) {
 							for (int i = 0; i < self->video_frame->nb_side_data; ++i) {
 								AVFrameSideData *sd = self->video_frame->side_data[i];
 								if (sd->type == AV_FRAME_DATA_A53_CC && sd->size) {
-									memcpy(frame->cc_side_data, sd->data, sd->size);
-									frame->cc_side_data_size = sd->size;
+									char cc_data[256];
+									char cc_size[8];
+
+									memcpy(cc_data, sd->data, sd->size);
+									sprintf(cc_size, "%d", sd->size);
+
+									mlt_properties_set(MLT_PRODUCER_PROPERTIES(self->parent), "meta.cc-size", cc_size);
+									mlt_properties_set(MLT_PRODUCER_PROPERTIES(self->parent), "meta.cc-data", cc_data);
 									break;
 								}
 							}
 						}
+						
+						if (self->scte_104) {
+							char scte[2051];
+							strcpy(scte, self->scte_104);
+							mlt_properties_set(MLT_PRODUCER_PROPERTIES(self->parent), "meta.scte-104", scte);
+						}
+
+						got_picture = 1;
+						decode_errors = 0;
 					}
 				}
 
@@ -2081,6 +2094,7 @@ exit_get_image:
 		av_frame_free(&self->video_frame);
 	if (self->sw_video_frame)
 		av_frame_free(&self->sw_video_frame);
+
 	pthread_mutex_unlock( &self->video_mutex );
 
 	// Set the progressive flag
@@ -2203,7 +2217,8 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 			mlt_log_warning(NULL, "failed to find hw_pix_fmt\n");
 		}
 
-		// mlt_log_warning(NULL, "scte104=%s\n", mlt_properties_get(properties, "scte104"));
+		if (mlt_properties_get(properties, "scte-104"))
+			strcpy(self->scte_104, mlt_properties_get(properties, "scte-104"));
 
 		// If we don't have a codec and we can't initialise it, we can't do much more...
 		pthread_mutex_lock( &self->open_mutex );

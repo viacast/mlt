@@ -28,8 +28,6 @@
 #include "mlt_deque.h"
 #include "mlt_service.h"
 
-#include <libavutil/frame.h>
-
 /** Callback function to get video data.
  *
  */
@@ -104,8 +102,6 @@ struct mlt_frame_s
 	mlt_deque stack_audio;   /**< \private the audio processing stack of operations and data */
 	mlt_deque stack_service; /**< \private a general purpose data stack */
 	int is_processing;       /**< \private indicates if a frame is or was processed by the parallel consumer */
-	uint8_t cc_side_data[1024];
-	int cc_side_data_size;
 };
 
 #define MLT_FRAME_PROPERTIES( frame )		( &( frame )->parent )

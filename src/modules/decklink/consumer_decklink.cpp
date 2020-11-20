@@ -88,6 +88,18 @@ public:
     IDeckLinkVideoFrameAncillary *_ancillary;
 };
 
+struct SCTE104
+{
+	unsigned int splice_insert_type;
+	unsigned int splice_event_id;
+	unsigned short unique_program_id;
+	unsigned short pre_roll_time;
+	unsigned short brk_duration;
+	unsigned char avail_num;
+	unsigned char avails_expected;
+	unsigned char auto_return_flag;
+};
+
 static const unsigned PREROLL_MINIMUM = 3;
 
 enum
@@ -636,10 +648,21 @@ exit_create_ancillary_data:
 			uint8_t cc_count;
 			int ret, i;
 
-			int size = frame->cc_side_data_size;
+			char *cc_size = mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.cc-size");
+			if (!cc_size || (cc_size && !strlen(cc_size)))
+				return;
+
+			int size = atoi(cc_size);
 			if (!size)
 					return;
-			const uint8_t *data = frame->cc_side_data;
+
+			mlt_log_warning(NULL, "size=%d\n", size);
+			const uint8_t *data = (uint8_t *) mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.cc-data");
+
+			if (!data) {
+				mlt_log_error(getConsumer(), "error constructing cc. size > 0 but data is null");
+				return;
+			}
 
 			cc_count = size / 3;
 
@@ -693,7 +716,7 @@ exit_create_ancillary_data:
 			int ret = 0, i, result;
 
 			if (!m_supports_vanc)
-					return 0;
+					return S_OK;
 
 			construct_cc(frame, &vanc_lines);
 
@@ -715,8 +738,58 @@ done:
 
 			return ret;
 	}
+	
+	struct SCTE104 parse_scte_104(const char *scte_104_str) {
+		struct SCTE104 scte_104;
 
-	int construct_scte104(mlt_frame frame, DeckLinkVideoFrame *decklink_frame)
+		if (!scte_104_str)
+				return scte_104;
+
+		// increased for every event
+		static unsigned int splice_event_id = 0;
+		// only changes on melted restart
+		static unsigned short unique_program_id = 0x1234;
+
+		scte_104.splice_event_id = ++splice_event_id;
+		scte_104.unique_program_id = unique_program_id;
+
+		char scte_cpy[1024];
+		strcpy(scte_cpy, scte_104_str);
+
+		char args[32][64];
+		int i = 0, j;
+
+		char *token = strtok(scte_cpy, " ");
+		while( token != NULL && i < 32 ) {
+				strcpy(args[i++], token);
+				token = strtok(NULL, " ");
+		}
+
+		for (j = 0; j < i; ++j) {
+				if (j + 1 >= i)
+						continue;
+				if (!strcmp("-insert_type", args[j]))
+						scte_104.splice_insert_type = atoi(args[j+1]);
+				if (!strcmp("-event_id", args[j]))
+						scte_104.splice_event_id = atoi(args[j+1]);
+				if (!strcmp("-program_id", args[j]))
+						scte_104.unique_program_id = atoi(args[j+1]);
+				if (!strcmp("-pre_roll", args[j]))
+						scte_104.pre_roll_time = atoi(args[j+1]);
+				if (!strcmp("-break_duration", args[j]))
+						scte_104.brk_duration = atoi(args[j+1]);
+				if (!strcmp("-avail_num", args[j]))
+						scte_104.avail_num = atoi(args[j+1]);
+				if (!strcmp("-avails_expected", args[j]))
+						scte_104.avails_expected = atoi(args[j+1]);
+				if (!strcmp("-auto_return", args[j]))
+						scte_104.auto_return_flag = atoi(args[j+1]);
+		}
+
+		return scte_104;
+	}
+
+	int construct_scte_104(mlt_frame frame, DeckLinkVideoFrame *decklink_frame)
 	{
 			struct klvanc_line_set_s vanc_lines = { 0 };
 			struct klvanc_packet_scte_104_s *pkt;
@@ -725,8 +798,13 @@ done:
 			uint16_t *words;
 			uint16_t wordCount;
 
-			if (!m_supports_vanc)
-					return S_FALSE;
+			char *scte = mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.scte-104");
+			if (!scte || (scte && !strlen(scte)))
+				return S_OK;
+
+			struct SCTE104 scte_104 = parse_scte_104(scte);
+			if (!m_supports_vanc || !scte_104.splice_event_id)
+					return S_OK;
 
 			IDeckLinkVideoFrameAncillary *vanc;
 			result = decklink_frame->GetAncillaryData(&vanc);
@@ -749,21 +827,14 @@ done:
 					goto scte104_done;
 			}
 
-			op->sr_data.splice_insert_type = 0x02;
-			op->sr_data.splice_event_id = 0x1234;
-			op->sr_data.unique_program_id = 0x4567;
-			op->sr_data.pre_roll_time = 0;
-			op->sr_data.brk_duration = 300;
-			op->sr_data.avail_num = 1;
-			op->sr_data.avails_expected = 2;
-			op->sr_data.auto_return_flag = 1;
+			op->sr_data = *(klvanc_splice_request_data *) &scte_104;
 
-			// result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
-			// if (result != S_OK) {
-			// 		mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
-			// 		ret = AVERROR(EIO);
-			// 		goto scte104_done;
-			// }
+			result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
+			if (result != S_OK) {
+					mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
+					ret = AVERROR(EIO);
+					goto scte104_done;
+			}
 
 			result = klvanc_convert_SCTE_104_to_words(m_vanc_ctx, pkt, &words, &wordCount);
 			if (result != S_OK)  {
@@ -808,9 +879,8 @@ scte104_done:
 
 		if ( rendered && !mlt_frame_get_image( frame, &image, &format, &m_width, &height, 0 ) )
 		{
-			if ( decklinkFrame ) {
+			if ( decklinkFrame )
 				decklinkFrame->GetBytes( (void**) &m_buffer );
-			}
 
 			if ( m_buffer )
 			{
@@ -907,7 +977,7 @@ scte104_done:
 					} else {
 						if (create_ancillary_data(decklink10BitFrame, bmdFormat10BitYUV) == S_OK) {
 							construct_vanc_cc(frame, decklink10BitFrame);
-							construct_scte104(frame, decklink10BitFrame);
+							construct_scte_104(frame, decklink10BitFrame);
 						}
 					}
 				} else {
