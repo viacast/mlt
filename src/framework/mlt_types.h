@@ -101,6 +101,7 @@ typedef enum
 	mlt_channel_7p1,
 	mlt_channel_7p1_wide_side,
 	mlt_channel_7p1_wide_back,
+	mlt_channel_hexadecagonal
 }
 mlt_channel_layout;
 

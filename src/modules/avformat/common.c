@@ -136,6 +136,7 @@ int64_t mlt_to_av_channel_layout( mlt_channel_layout layout )
 		case mlt_channel_7p1:            return AV_CH_LAYOUT_7POINT1;
 		case mlt_channel_7p1_wide_side:  return AV_CH_LAYOUT_7POINT1_WIDE;
 		case mlt_channel_7p1_wide_back:  return AV_CH_LAYOUT_7POINT1_WIDE_BACK;
+		case mlt_channel_hexadecagonal:  return AV_CH_LAYOUT_HEXADECAGONAL;
 	}
 	mlt_log_error( NULL, "[avformat] Unknown channel configuration: %d\n", layout );
 	return 0;
@@ -172,6 +173,7 @@ mlt_channel_layout av_channel_layout_to_mlt( int64_t layout )
 		case AV_CH_LAYOUT_7POINT1:           return mlt_channel_7p1;
 		case AV_CH_LAYOUT_7POINT1_WIDE:      return mlt_channel_7p1_wide_side;
 		case AV_CH_LAYOUT_7POINT1_WIDE_BACK: return mlt_channel_7p1_wide_back;
+		case AV_CH_LAYOUT_HEXADECAGONAL:     return mlt_channel_hexadecagonal;
 	}
 	mlt_log_error( NULL, "[avformat] Unknown channel layout: %lu\n", (unsigned long)layout );
 	return mlt_channel_independent;

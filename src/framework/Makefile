@@ -51,7 +51,8 @@ OBJS = mlt_audio.o \
 	   mlt_cache.o \
 	   mlt_animation.o \
 	   mlt_slices.o \
-	   mlt_luma_map.o
+	   mlt_luma_map.o \
+		 shared_memory.o
 
 INCS = mlt_audio.h \
 	   mlt_consumer.h \
@@ -94,7 +95,7 @@ endif
 
 CFLAGS += $(RDYNAMIC) -DPREFIX_DATA="\"$(mltdatadir)\"" -DPREFIX_LIB="\"$(moduledir)\""
 
-LDFLAGS += $(LIBDL) -lpthread -lm
+LDFLAGS += $(LIBDL) -lpthread -lm -lrt -lavutil
 
 all:	$(TARGET)
 

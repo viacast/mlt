@@ -1,5 +1,5 @@
 CFLAGS += -I../..
-LDFLAGS += -L../../framework -lmlt -lpthread -lm
+LDFLAGS += -L../../framework -lmlt -lpthread -lm -lklvanc
 
 ifneq (, $(shell $(CC) --version | grep -is -e 'Free Software Foundation'))
 	LDFLAGS += -latomic

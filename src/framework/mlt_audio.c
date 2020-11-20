@@ -564,6 +564,7 @@ const char* mlt_audio_channel_layout_name( mlt_channel_layout layout )
 		case mlt_channel_7p1:            return "7.1";
 		case mlt_channel_7p1_wide_side:  return "7.1(wide-side)";
 		case mlt_channel_7p1_wide_back:  return "7.1(wide)";
+		case mlt_channel_hexadecagonal:  return "hexadecagonal";
 	}
 	return "invalid";
 }
@@ -628,6 +629,7 @@ int mlt_audio_channel_layout_channels( mlt_channel_layout layout )
 		case mlt_channel_7p1:            return 8;
 		case mlt_channel_7p1_wide_back:  return 8;
 		case mlt_channel_7p1_wide_side:  return 8;
+		case mlt_channel_hexadecagonal:  return 16;
 	}
 	return 0;
 }

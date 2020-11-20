@@ -167,7 +167,7 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 			!strcmp( argv[ i ], "-mix" ) ||
 			!strcmp( argv[ i ], "-filter" ) ||
 			!strcmp( argv[ i ], "-transition" ) ||
-			!strcmp( argv[ i ], "-run" ) ||
+			!strcmp( argv[ i ], "-scte-104" ) ||
 			!strcmp( argv[ i ], "-blank" ) ) )
 		{
 			fprintf( stderr, "Argument missing for %s.\n", argv[ i ] );
@@ -242,10 +242,6 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 				producer = info.cut;
 				properties = MLT_PRODUCER_PROPERTIES( producer );
 			}
-		}
-		else if ( !strcmp( argv[ i ], "-run" ) )
-		{
-			system(argv[ ++i ]);
 		}
 		else if ( !strcmp( argv[ i ], "-split" ) )
 		{
@@ -394,6 +390,14 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 				// support for legacy where plain int is an out point instead of length
 				mlt_playlist_blank( playlist, atof( argv[ ++ i ] ) );
 		}
+		else if ( !strcmp( argv[ i ], "-scte-104" ) )
+		{
+			char *scte_104 = argv[ ++i ];
+			if ( producer != NULL ) 
+			{
+				mlt_properties_set(MLT_PRODUCER_PROPERTIES(producer), "scte-104", scte_104);
+			}
+		}
 		else if ( !strcmp( argv[ i ], "-track" ) ||
 				  !strcmp( argv[ i ], "-null-track" ) ||
 				  !strcmp( argv[ i ], "-video-track" ) ||
@@ -488,7 +492,8 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 	mlt_properties_set_position( props, "length", mlt_producer_get_out( MLT_MULTITRACK_PRODUCER( multitrack ) ) + 1 );
 	mlt_producer_set_in_and_out( prod, 0, mlt_producer_get_out( MLT_MULTITRACK_PRODUCER( multitrack ) ) );
 	if ( title != NULL )
-		mlt_properties_set( props, "title", strchr( title, '/' ) ? strrchr( title, '/' ) + 1 : title );
+		// mlt_properties_set( props, "title", strchr( title, '/' ) ? strrchr( title, '/' ) + 1 : title );
+		mlt_properties_set( props, "title", title );
 
 	// If the last producer has a consumer property connect it tractor
 	if ( producer )
