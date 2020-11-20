@@ -656,7 +656,6 @@ exit_create_ancillary_data:
 			if (!size)
 					return;
 
-			mlt_log_warning(NULL, "size=%d\n", size);
 			const uint8_t *data = (uint8_t *) mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.cc-data");
 
 			if (!data) {
