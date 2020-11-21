@@ -648,20 +648,24 @@ exit_create_ancillary_data:
 			uint8_t cc_count;
 			int ret, i;
 
-			char *cc_size = mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.cc-size");
-			if (!cc_size || (cc_size && !strlen(cc_size)))
-				return;
+			int frame_id = mlt_properties_get_int(MLT_FRAME_PROPERTIES(frame), "meta.frame-id");
+			int size = mlt_properties_get_int(MLT_FRAME_PROPERTIES(frame), "meta.cc-size");
 
-			int size = atoi(cc_size);
 			if (!size)
 					return;
 
-			const uint8_t *data = (uint8_t *) mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.cc-data");
+			uint8_t data[size];
 
-			if (!data) {
-				mlt_log_error(getConsumer(), "error constructing cc. size > 0 but data is null");
-				return;
+			for (int i = 0; i < size; ++i) {
+					char key[32];
+					sprintf(key, "meta.cc-data-%d", i);
+					data[i] = mlt_properties_get_int(MLT_FRAME_PROPERTIES(frame), key);
 			}
+
+			// mlt_log_warning(NULL, "c:frame-id=%d\n", frame_id);
+			// for (i = 0; i < size; ++i) {
+			// 		mlt_log_warning(NULL, "c:data[%d]=%d\n", i, data[i]);
+			// }
 
 			cc_count = size / 3;
 
@@ -677,8 +681,8 @@ exit_create_ancillary_data:
 			}
 
 			if (cc_count > KLVANC_MAX_CC_COUNT) {
-				mlt_log_error(getConsumer(), "Illegal cc_count received: %d\n", cc_count);
-				cc_count = KLVANC_MAX_CC_COUNT;
+					mlt_log_error(getConsumer(), "Illegal cc_count received: %d\n", cc_count);
+					cc_count = KLVANC_MAX_CC_COUNT;
 			}
 
 			/* CC data */
@@ -828,12 +832,12 @@ done:
 
 			op->sr_data = *(klvanc_splice_request_data *) &scte_104;
 
-			result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
-			if (result != S_OK) {
-					mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
-					ret = AVERROR(EIO);
-					goto scte104_done;
-			}
+			// result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
+			// if (result != S_OK) {
+			// 		mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
+			// 		ret = AVERROR(EIO);
+			// 		goto scte104_done;
+			// }
 
 			result = klvanc_convert_SCTE_104_to_words(m_vanc_ctx, pkt, &words, &wordCount);
 			if (result != S_OK)  {
