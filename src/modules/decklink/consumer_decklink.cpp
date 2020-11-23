@@ -98,6 +98,7 @@ struct SCTE104
 	unsigned char avail_num;
 	unsigned char avails_expected;
 	unsigned char auto_return_flag;
+	unsigned int send_interval;
 };
 
 static const unsigned PREROLL_MINIMUM = 3;
@@ -154,6 +155,8 @@ private:
 	struct klvanc_context_s*    m_vanc_ctx;
 	IDeckLinkVideoConversion*   m_decklinkVideoConversion;
 	uint16_t 										m_cdp_sequence_num;
+	unsigned int                m_last_scte_sent_event_id;
+	double										  m_last_scte_sent_time;
 
 	IDeckLinkDisplayMode* getDisplayMode()
 	{
@@ -189,6 +192,9 @@ private:
 public:
 	mlt_consumer getConsumer()
 		{ return &m_consumer; }
+
+	double currentTime() 
+		{ return (double)(m_count * m_duration)/(double)m_timescale; }
 
 	DeckLinkConsumer()
 	{
@@ -731,11 +737,10 @@ exit_create_ancillary_data:
 					ret = AVERROR(EIO);
 					goto done;
 			}
-
 			insert_vanc(vanc, &vanc_lines);
-			vanc->Release();
-
 done:
+			if (vanc)
+				vanc->Release();
 			for (i = 0; i < vanc_lines.num_lines; i++)
 					klvanc_line_free(vanc_lines.lines[i]);
 
@@ -787,6 +792,8 @@ done:
 						scte_104.avails_expected = atoi(args[j+1]);
 				if (!strcmp("-auto_return", args[j]))
 						scte_104.auto_return_flag = atoi(args[j+1]);
+				if (!strcmp("-send_interval", args[j]))
+						scte_104.send_interval = atoi(args[j+1]);
 		}
 
 		return scte_104;
@@ -803,31 +810,47 @@ done:
 
 			char *scte = mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.scte-104");
 			if (!scte || (scte && !strlen(scte)))
-				return S_OK;
+					return S_OK;
 
 			struct SCTE104 scte_104 = parse_scte_104(scte);
 			if (!m_supports_vanc || !scte_104.splice_event_id)
 					return S_OK;
+
+			if (!scte_104.send_interval && scte_104.splice_event_id == m_last_scte_sent_event_id) {
+					return S_OK;
+			}
+			if (scte_104.send_interval) {
+				double now = currentTime();
+				if (now < m_last_scte_sent_time + scte_104.send_interval) {
+						return S_OK;
+				}
+				m_last_scte_sent_time = now;
+			}
+			m_last_scte_sent_event_id = scte_104.splice_event_id;
+			
+			// mlt_log_warning(NULL, "sending scte104\n");
 
 			IDeckLinkVideoFrameAncillary *vanc;
 			result = decklink_frame->GetAncillaryData(&vanc);
 
 			if (result != S_OK) {
 					mlt_log_error(getConsumer(), "Failed to get vanc scte104\n");
-					return AVERROR(EIO);
+					ret = AVERROR(EIO);
+					goto exit_scte104;
 			}
 
 			result = klvanc_alloc_SCTE_104(0xffff, &pkt);
 			if (result != S_OK) {
 					mlt_log_error(getConsumer(), "Failed to alloc scte104\n");
-					return AVERROR(EIO);
+					ret = AVERROR(EIO);
+					goto exit_scte104;
 			}
 
 			result =  klvanc_SCTE_104_Add_MOM_Op(pkt, MO_SPLICE_REQUEST_DATA, &op);
 			if (result != S_OK) {
 					mlt_log_error(getConsumer(), "Failed to add SCTE 104 op\n");
 					ret = AVERROR(EIO);
-					goto scte104_done;
+					goto exit_scte104;
 			}
 
 			op->sr_data = *(klvanc_splice_request_data *) &scte_104;
@@ -836,27 +859,27 @@ done:
 			// if (result != S_OK) {
 			// 		mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
 			// 		ret = AVERROR(EIO);
-			// 		goto scte104_done;
+			// 		goto exit_scte104;
 			// }
 
 			result = klvanc_convert_SCTE_104_to_words(m_vanc_ctx, pkt, &words, &wordCount);
 			if (result != S_OK)  {
 					mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
 					ret = AVERROR(EIO);
-					goto scte104_done;
+					goto exit_scte104;
 			}
 
 			ret = klvanc_line_insert(m_vanc_ctx, &vanc_lines, words, wordCount, SCTE104_VANC_LINE, 0);
 			if (ret != 0) {
 					mlt_log_error(getConsumer(), "VANC line insertion failed\n");
 					ret = AVERROR(EIO);
-					goto scte104_done;
+					goto exit_scte104;
 			}
 
 			insert_vanc(vanc, &vanc_lines);
-			vanc->Release();
-
-scte104_done:
+exit_scte104:
+			if (vanc)
+				vanc->Release();
 			for (i = 0; i < vanc_lines.num_lines; i++)
 					klvanc_line_free(vanc_lines.lines[i]);
 			if (pkt)

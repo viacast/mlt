@@ -49,6 +49,7 @@
 #include <libavutil/imgutils.h>
 #include <libavutil/version.h>
 
+#define USE_VAAPI 1
 #if USE_VAAPI
 #include <libavutil/hwcontext.h>
 #include <libavcodec/packet.h>
@@ -957,7 +958,11 @@ static void prepare_reopen( producer_avformat self )
 	if ( self->video_codec )
 		avcodec_close( self->video_codec );
 	self->video_codec = NULL;
+	if ( self->video_frame )
+		av_free(self->video_frame);
 #if USE_VAAPI
+	if ( self->sw_video_frame )
+		av_free(self->video_frame);
 	if (self->hw_device_ctx)
 		av_buffer_unref(&self->hw_device_ctx);
 	self->hw_device_ctx = NULL;
@@ -1722,8 +1727,13 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 		if ( ( image_size = allocate_buffer( frame, codec_params, buffer, *format, *width, *height ) ) )
 		{
 			int yuv_colorspace;
+#if USE_VAAPI
+			yuv_colorspace = convert_image( self, self->video_frame, *buffer, self->video_frame->format,
+				format, *width, *height, &alpha );
+#else
 			yuv_colorspace = convert_image( self, self->video_frame, *buffer, codec_params->format,
 				format, *width, *height, &alpha );
+#endif
 			mlt_properties_set_int( frame_properties, "colorspace", yuv_colorspace );
 			got_picture = 1;
 		}
@@ -1737,7 +1747,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 		if ( !self->video_frame )
 			self->video_frame = av_frame_alloc();
 #if USE_VAAPI
-		if (!self->sw_video_frame)
+		if ( !self->sw_video_frame )
 			self->sw_video_frame = av_frame_alloc();
 #endif
 
@@ -1846,10 +1856,9 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					{
 #if USE_VAAPI
 						if (self->hw_device_ctx && self->video_frame->format == HW_PIX_FMT) {
-							ret = av_hwframe_transfer_data(self->sw_video_frame, self->video_frame, 0);
-							if(ret < 0) {
-								av_strerror(ret, errstr, 1000);
-								mlt_log_error(NULL, "av_hwframe_transfer_data() failed %s\n", errstr);
+							int transfer_data_result = av_hwframe_transfer_data(self->sw_video_frame, self->video_frame, 0);
+							if(transfer_data_result < 0) {
+								mlt_log_error(NULL, "av_hwframe_transfer_data() failed %d\n", transfer_data_result);
 								return -1;
 							}
 							av_frame_copy_props(self->sw_video_frame, self->video_frame);
@@ -1869,7 +1878,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 									mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), "meta.frame-id", ++frame_id);
 									mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), "meta.cc-size", sd->size);
 
-									for (int j = 0; j < sd->size/8; ++j) {
+									for (int j = 0; j < sd->size; ++j) {
 										char key[32];
 										sprintf(key, "meta.cc-data-%d", j);
 										mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), key, sd->data[j]);
@@ -1952,8 +1961,13 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				if ( ( image_size = allocate_buffer( frame, codec_params, buffer, *format, *width, *height ) ) )
 				{
 					int yuv_colorspace;
+#if USE_VAAPI
+					yuv_colorspace = convert_image( self, self->video_frame, *buffer, self->video_frame->format,
+						format, *width, *height, &alpha );
+#else
 					yuv_colorspace = convert_image( self, self->video_frame, *buffer, codec_params->format,
 						format, *width, *height, &alpha );
+#endif
 					mlt_properties_set_int( frame_properties, "colorspace", yuv_colorspace );
 					self->top_field_first |= self->video_frame->top_field_first;
 					self->top_field_first |= codec_params->field_order == AV_FIELD_TT;
@@ -2021,12 +2035,12 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 	self->video_expected = position + 1;
 
 exit_get_image:
-// 	if (self->video_frame)
-// 		av_frame_free(&self->video_frame);
-// #if USE_VAAPI
-// 	if (self->sw_video_frame)
-// 		av_frame_free(&self->sw_video_frame);
-// #endif
+	if ( self->video_frame )
+		av_frame_unref( self->video_frame );
+#if USE_VAAPI
+	if ( self->sw_video_frame )
+		av_frame_unref( self->sw_video_frame );
+#endif
 	pthread_mutex_unlock( &self->video_mutex );
 
 	// Set the progressive flag
@@ -3073,7 +3087,7 @@ static void producer_avformat_close( producer_avformat self )
 	av_free( self->audio_frame );
 
 #if USE_VAAPI
-	av_free(&self->sw_video_frame);
+	av_free(self->sw_video_frame);
 	av_buffer_unref(&self->hw_device_ctx);
 #endif
 
