@@ -49,9 +49,10 @@
 #include <libavutil/imgutils.h>
 #include <libavutil/version.h>
 
-#define USE_VAAPI 1
-#if USE_VAAPI
+#define USE_HWACCEL 1
+#if USE_HWACCEL
 #include <libavutil/hwcontext.h>
+#include <libavutil/pixfmt.h>
 #include <libavcodec/packet.h>
 #endif
 
@@ -132,18 +133,16 @@ struct producer_avformat_s
 	int autorotate;
 	int is_audio_synchronizing;
 	int video_send_result;
-#if USE_VAAPI
+#if USE_HWACCEL
+	int hw_pix_fmt;
+	int hw_device_type;
+	char hw_device[128];
 	AVBufferRef* hw_device_ctx;
 	AVFrame* sw_video_frame;
 #endif
 	char scte_104[2051];
 };
 typedef struct producer_avformat_s *producer_avformat;
-
-#if USE_VAAPI
-#define HW_PIX_FMT AV_PIX_FMT_VAAPI
-#define HW_DEVICE_TYPE AV_HWDEVICE_TYPE_VAAPI
-#endif
 
 // Forward references.
 static int list_components( char* file );
@@ -630,7 +629,7 @@ static enum AVPixelFormat pick_pix_fmt( enum AVPixelFormat pix_fmt )
 	case AV_PIX_FMT_BAYER_RGGB16LE:
 		return AV_PIX_FMT_RGB24;
 #endif
-#if USE_VAAPI
+#if USE_HWACCEL
 	case AV_PIX_FMT_VAAPI:
 		return AV_PIX_FMT_YUV420P;
 #endif
@@ -844,6 +843,14 @@ static int producer_open(producer_avformat self, mlt_profile profile, const char
 			self->first_pts = AV_NOPTS_VALUE;
 			self->last_position = POSITION_INITIAL;
 
+#if USE_HWACCEL
+			// TODO: switch case by query string
+			self->hw_pix_fmt = AV_PIX_FMT_VAAPI;
+			self->hw_device_type = AV_HWDEVICE_TYPE_VAAPI;
+			char *device = "/dev/dri/renderD128";
+			memcpy(self->hw_device, device, strlen(device));
+#endif
+
 			if ( !self->audio_format )
 			{
 				// We're going to cheat here - for seekable A/V files, we will have separate contexts
@@ -958,13 +965,10 @@ static void prepare_reopen( producer_avformat self )
 	if ( self->video_codec )
 		avcodec_close( self->video_codec );
 	self->video_codec = NULL;
-	if ( self->video_frame )
-		av_free(self->video_frame);
-#if USE_VAAPI
-	if ( self->sw_video_frame )
-		av_free(self->video_frame);
-	if (self->hw_device_ctx)
-		av_buffer_unref(&self->hw_device_ctx);
+	av_frame_unref( self->video_frame );
+#if USE_HWACCEL
+	av_frame_unref( self->sw_video_frame );
+	av_buffer_unref( &self->hw_device_ctx );
 	self->hw_device_ctx = NULL;
 #endif
 	if ( self->seekable && self->audio_format )
@@ -1727,7 +1731,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 		if ( ( image_size = allocate_buffer( frame, codec_params, buffer, *format, *width, *height ) ) )
 		{
 			int yuv_colorspace;
-#if USE_VAAPI
+#if USE_HWACCEL
 			yuv_colorspace = convert_image( self, self->video_frame, *buffer, self->video_frame->format,
 				format, *width, *height, &alpha );
 #else
@@ -1746,56 +1750,55 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 		// Construct an AVFrame for YUV422 conversion
 		if ( !self->video_frame )
 			self->video_frame = av_frame_alloc();
-#if USE_VAAPI
+#if USE_HWACCEL
 		if ( !self->sw_video_frame )
 			self->sw_video_frame = av_frame_alloc();
 #endif
-
-		while ((self->video_send_result >= 0 || self->video_send_result == AVERROR(EAGAIN)) && !got_picture)
+		while ( ( self->video_send_result >= 0 || self->video_send_result == AVERROR( EAGAIN ) ) && !got_picture )
 		{
-			if (self->video_send_result != AVERROR(EAGAIN)) 
-		{
-			// Read a packet
-			if ( self->pkt.stream_index == self->video_index )
-						av_packet_unref( &self->pkt );
-			av_init_packet( &self->pkt );
-			pthread_mutex_lock( &self->packets_mutex );
-			if ( mlt_deque_count( self->vpackets ) )
+			if ( self->video_send_result != AVERROR( EAGAIN ) ) 
 			{
-				AVPacket *tmp = (AVPacket*) mlt_deque_pop_front( self->vpackets );
-						av_packet_ref(&self->pkt, tmp);
-						av_packet_free(&tmp);
-			}
-			else
-			{
-						int ret = av_read_frame( context, &self->pkt );
-				if ( ret >= 0 && !self->video_seekable && self->pkt.stream_index == self->audio_index )
+				// Read a packet
+				if ( self->pkt.stream_index == self->video_index )
+					av_packet_unref( &self->pkt );
+				av_init_packet( &self->pkt );
+				pthread_mutex_lock( &self->packets_mutex );
+				if ( mlt_deque_count( self->vpackets ) )
 				{
-							mlt_deque_push_back(self->apackets, av_packet_clone(&self->pkt));
+					AVPacket *tmp = (AVPacket*) mlt_deque_pop_front( self->vpackets );
+					av_packet_ref( &self->pkt, tmp );
+					av_packet_free( &tmp );
 				}
-				else if ( ret < 0 )
+				else
 				{
-					if ( ret != AVERROR_EOF )
-						mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), "av_read_frame returned error %d inside get_image\n", ret );
-					if ( !self->video_seekable && mlt_properties_get_int( properties, "reconnect" ) )
+					int ret = av_read_frame( context, &self->pkt );
+					if ( ret >= 0 && !self->video_seekable && self->pkt.stream_index == self->audio_index )
 					{
-						// Try to reconnect to live sources by closing context and codecs,
-						// and letting next call to get_frame() reopen.
-						prepare_reopen( self );
-						pthread_mutex_unlock( &self->packets_mutex );
-						goto exit_get_image;
+						mlt_deque_push_back( self->apackets, av_packet_clone( &self->pkt ) );
 					}
-					if ( !self->video_seekable && mlt_properties_get_int( properties, "exit_on_disconnect" ) )
+					else if ( ret < 0 )
 					{
-						mlt_log_fatal( MLT_PRODUCER_SERVICE(producer), "Exiting with error due to disconnected source.\n" );
-						exit( EXIT_FAILURE );
+						if ( ret != AVERROR_EOF )
+							mlt_log_verbose( MLT_PRODUCER_SERVICE( producer ), "av_read_frame returned error %d inside get_image\n", ret );
+						if ( !self->video_seekable && mlt_properties_get_int( properties, "reconnect" ) )
+						{
+							// Try to reconnect to live sources by closing context and codecs,
+							// and letting next call to get_frame() reopen.
+							prepare_reopen( self );
+							pthread_mutex_unlock( &self->packets_mutex );
+							goto exit_get_image;
+						}
+						if ( !self->video_seekable && mlt_properties_get_int( properties, "exit_on_disconnect" ) )
+						{
+							mlt_log_fatal( MLT_PRODUCER_SERVICE( producer ), "Exiting with error due to disconnected source.\n" );
+							exit( EXIT_FAILURE );
+						}
+						// Send null packets to drain decoder.
+						self->pkt.size = 0;
+						self->pkt.data = NULL;
 					}
-					// Send null packets to drain decoder.
-					self->pkt.size = 0;
-					self->pkt.data = NULL;
 				}
-			}
-			pthread_mutex_unlock( &self->packets_mutex );
+				pthread_mutex_unlock( &self->packets_mutex );
 			}
 
 			// We only deal with video from the selected video_index
@@ -1836,73 +1839,81 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					codec_context->reordered_opaque = int_position;
 					if ( int_position >= req_position )
 						codec_context->skip_loop_filter = AVDISCARD_NONE;
-					self->video_send_result = avcodec_send_packet(codec_context, &self->pkt);
-					mlt_log_debug( MLT_PRODUCER_SERVICE(producer), "decoded packet with size %d => %d\n", self->pkt.size, self->video_send_result );
+					self->video_send_result = avcodec_send_packet( codec_context, &self->pkt );
+					mlt_log_debug( MLT_PRODUCER_SERVICE( producer ), "decoded packet with size %d => %d\n", self->pkt.size, self->video_send_result );
 					// Note: decode may fail at the beginning of MPEGfile (B-frames referencing before first I-frame), so allow a few errors.
 					if (self->video_send_result < 0 && self->video_send_result != AVERROR(EAGAIN))
-						{
-						mlt_log_warning(MLT_PRODUCER_SERVICE(producer), "avcodec_send_packet failed with %d\n", self->video_send_result);
-						}
-					else
 					{
-						int error = avcodec_receive_frame(codec_context, self->video_frame);
-						if (error < 0) {
-							if (error != AVERROR(EAGAIN) && ++decode_errors > 10 ) {
-								mlt_log_warning( MLT_PRODUCER_SERVICE(producer), "video decoding error %d\n", error );
-							self->last_good_position = POSITION_INVALID;
-						}
+						mlt_log_warning( MLT_PRODUCER_SERVICE( producer ), "avcodec_send_packet failed with %d\n", self->video_send_result );
 					}
 					else
 					{
-#if USE_VAAPI
-						if (self->hw_device_ctx && self->video_frame->format == HW_PIX_FMT) {
-							int transfer_data_result = av_hwframe_transfer_data(self->sw_video_frame, self->video_frame, 0);
-							if(transfer_data_result < 0) {
-								mlt_log_error(NULL, "av_hwframe_transfer_data() failed %d\n", transfer_data_result);
-								return -1;
+						int error = avcodec_receive_frame( codec_context, self->video_frame );
+						if ( error < 0 ) 
+						{
+							if ( error != AVERROR( EAGAIN ) && ++decode_errors > 10 ) 
+							{
+								mlt_log_warning( MLT_PRODUCER_SERVICE( producer ), "video decoding error %d\n", error );
+								self->last_good_position = POSITION_INVALID;
 							}
-							av_frame_copy_props(self->sw_video_frame, self->video_frame);
-							self->sw_video_frame->width = self->video_frame->width;
-							self->sw_video_frame->height = self->video_frame->height;
+						}
+						else
+						{
+#if USE_HWACCEL
+							if ( self->hw_device_ctx && self->video_frame->format == self->hw_pix_fmt )
+							{
+								int transfer_data_result = av_hwframe_transfer_data( self->sw_video_frame, self->video_frame, 0 );
+								if( transfer_data_result < 0 ) 
+								{
+									mlt_log_error( MLT_PRODUCER_SERVICE( producer ), "av_hwframe_transfer_data() failed %d\n", transfer_data_result );
+									return -1;
+								}
+								av_frame_copy_props( self->sw_video_frame, self->video_frame );
+								self->sw_video_frame->width = self->video_frame->width;
+								self->sw_video_frame->height = self->video_frame->height;
 
-							av_frame_unref(self->video_frame);
-							av_frame_move_ref(self->video_frame, self->sw_video_frame);
-            }
+								av_frame_unref( self->video_frame );
+								av_frame_move_ref( self->video_frame, self->sw_video_frame );
+							}
 #endif
-						if (self->video_frame->nb_side_data) {
-							for (int i = 0; i < self->video_frame->nb_side_data; ++i) {
-								AVFrameSideData *sd = self->video_frame->side_data[i];
-								if (sd->type == AV_FRAME_DATA_A53_CC && sd->size) {
-									static int frame_id = 0;
+							if (self->video_frame->nb_side_data) 
+							{
+								for (int i = 0; i < self->video_frame->nb_side_data; ++i) 
+								{
+									AVFrameSideData *sd = self->video_frame->side_data[i];
+									if (sd->type == AV_FRAME_DATA_A53_CC && sd->size) 
+									{
+										static int frame_id = 0;
 
-									mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), "meta.frame-id", ++frame_id);
-									mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), "meta.cc-size", sd->size);
+										mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), "meta.frame-id", ++frame_id);
+										mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), "meta.cc-size", sd->size);
 
-									for (int j = 0; j < sd->size; ++j) {
-										char key[32];
-										sprintf(key, "meta.cc-data-%d", j);
-										mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), key, sd->data[j]);
+										for (int j = 0; j < sd->size; ++j) {
+											char key[32];
+											sprintf(key, "meta.cc-data-%d", j);
+											mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), key, sd->data[j]);
+										}
+
+										// mlt_log_warning(MLT_PRODUCER_SERVICE( producer ), "p:frame-id=%d\n", frame_id);
+										// for (int j = 0; j < sd->size; ++j) {
+										// 	mlt_log_warning(MLT_PRODUCER_SERVICE( producer ), "p:data[%d]=%d\n", j, sd->data[j]);
+										// }
+
+										break;
 									}
-
-									// mlt_log_warning(NULL, "p:frame-id=%d\n", frame_id);
-									// for (int j = 0; j < sd->size; ++j) {
-									// 	mlt_log_warning(NULL, "p:data[%d]=%d\n", j, sd->data[j]);
-									// }
-
-									break;
 								}
 							}
+							
+							if (self->scte_104) 
+							{
+								char scte[2051];
+								strcpy(scte, self->scte_104);
+								mlt_properties_set(MLT_PRODUCER_PROPERTIES(self->parent), "meta.scte-104", scte);
+							}
+							got_picture = 1;
+							decode_errors = 0;
 						}
-						
-						if (self->scte_104) {
-							char scte[2051];
-							strcpy(scte, self->scte_104);
-							mlt_properties_set(MLT_PRODUCER_PROPERTIES(self->parent), "meta.scte-104", scte);
-						}
-						got_picture = 1;
-						decode_errors = 0;
 					}
-				}
 				}
 
 				if ( got_picture )
@@ -1934,7 +1945,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				{
 					self->video_send_result = -1;
 				}
-				mlt_log_debug( MLT_PRODUCER_SERVICE(producer), " got_pic %d key %d send_result %d pkt_pos %"PRId64"\n",
+				mlt_log_debug( MLT_PRODUCER_SERVICE( producer ), " got_pic %d key %d send_result %d pkt_pos %"PRId64"\n",
 							   got_picture, self->pkt.flags & AV_PKT_FLAG_KEY, self->video_send_result, int_position );
 			}
 
@@ -1961,7 +1972,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				if ( ( image_size = allocate_buffer( frame, codec_params, buffer, *format, *width, *height ) ) )
 				{
 					int yuv_colorspace;
-#if USE_VAAPI
+#if USE_HWACCEL
 					yuv_colorspace = convert_image( self, self->video_frame, *buffer, self->video_frame->format,
 						format, *width, *height, &alpha );
 #else
@@ -2035,24 +2046,21 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 	self->video_expected = position + 1;
 
 exit_get_image:
-	if ( self->video_frame )
-		av_frame_unref( self->video_frame );
-#if USE_VAAPI
-	if ( self->sw_video_frame )
-		av_frame_unref( self->sw_video_frame );
-#endif
 	pthread_mutex_unlock( &self->video_mutex );
 
 	// Set the progressive flag
 	if ( mlt_properties_get( properties, "force_progressive" ) ) {
 		mlt_properties_set_int( frame_properties, "progressive", !!mlt_properties_get_int( properties, "force_progressive" ) );
-	} else if ( self->video_frame ) {
+	} else if ( self->video_frame && codec_params ) {
 		mlt_properties_set_int( frame_properties, "progressive",
 			!self->video_frame->interlaced_frame &&
 				(codec_params->field_order == AV_FIELD_PROGRESSIVE ||
 				 codec_params->field_order == AV_FIELD_UNKNOWN) );
 	}
-
+	av_frame_unref( self->video_frame );
+#if USE_HWACCEL
+	av_frame_unref( self->sw_video_frame );
+#endif
 	// Set the field order property for this frame
 	if ( mlt_properties_get( properties, "force_tff" ) )
 		mlt_properties_set_int( frame_properties, "top_field_first", !!mlt_properties_get_int( properties, "force_tff" ) );
@@ -2090,19 +2098,6 @@ static void apply_properties( void *obj, mlt_properties properties, int flags )
 	}
 }
 
-#if USE_VAAPI
-static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
-																				const enum AVPixelFormat *pix_fmts)
-{
-	const enum AVPixelFormat *p;
-	for (p = pix_fmts; *p != -1; p++)
-		if (*p == HW_PIX_FMT)
-			return *p;
-	mlt_log_warning(NULL, "get_hw_format() failed\n");
-	return *pix_fmts;
-}
-#endif
-
 /** Initialize the video codec context.
  */
 
@@ -2138,31 +2133,39 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 		if ( thread_count >= 0 )
 			codec_context->thread_count = thread_count;
 
-#if USE_VAAPI
-		int found_hw_pix_fmt = 0;
-		for (int i = 0;; i++) {
-			const AVCodecHWConfig *config = avcodec_get_hw_config(codec, i);
-			if (!config) break;
+#if USE_HWACCEL
+		int found_hw_pix_fmt = 0, i;
+		for ( i = 0;; i++ ) 
+		{
+			const AVCodecHWConfig *config = avcodec_get_hw_config( codec, i );
+			if ( !config ) 
+				break;
 
-			if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
-				config->device_type == HW_DEVICE_TYPE && config->pix_fmt == HW_PIX_FMT) {
+			if ( config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+				config->device_type == self->hw_device_type && config->pix_fmt == self->hw_pix_fmt ) 
+			{
 				found_hw_pix_fmt = 1;
 				break;
 			}
 		}
-		if (found_hw_pix_fmt) {
-			if (self->hw_device_ctx)
-				av_buffer_unref(&self->hw_device_ctx);
-			int ret = av_hwdevice_ctx_create(&self->hw_device_ctx, HW_DEVICE_TYPE, "/dev/dri/renderD128", NULL, 0);
-			if (ret >= 0) {
-				codec_context->get_format = get_hw_format;
-				codec_context->hw_device_ctx = av_buffer_ref(self->hw_device_ctx);
-				mlt_log_warning(NULL, "av_hwdevice_ctx_create() success %d\n", codec_context->pix_fmt);
-			} else {
-				mlt_log_warning(NULL, "av_hwdevice_ctx_create() failed %d\n", ret);
+		
+		if ( found_hw_pix_fmt )
+		{
+			av_buffer_unref( &self->hw_device_ctx );
+			int ret = av_hwdevice_ctx_create( &self->hw_device_ctx, self->hw_device_type, self->hw_device, NULL, 0 );
+			if ( ret >= 0 )
+			{
+				codec_context->hw_device_ctx = av_buffer_ref( self->hw_device_ctx );
+				mlt_log_info( MLT_PRODUCER_SERVICE( self->parent ), "av_hwdevice_ctx_create() success %d\n", codec_context->pix_fmt );
+			} 
+			else 
+			{
+				mlt_log_warning( MLT_PRODUCER_SERVICE( self->parent ), "av_hwdevice_ctx_create() failed %d\n", ret );
 			}
-		} else {
-			mlt_log_warning(NULL, "failed to find hw_pix_fmt\n");
+		} 
+		else 
+		{
+			mlt_log_warning( MLT_PRODUCER_SERVICE( self->parent ), "failed to find hw_pix_fmt\n" );
 		}
 #endif
 
@@ -2739,15 +2742,15 @@ static int producer_get_audio( mlt_frame frame, void **buffer, mlt_audio_format 
 			if ( mlt_deque_count( self->apackets ) )
 			{
 				AVPacket *tmp = (AVPacket*) mlt_deque_pop_front( self->apackets );
-				av_packet_ref(&pkt, tmp);
-				av_packet_free(&tmp);
+				av_packet_ref( &pkt, tmp );
+				av_packet_free( &tmp );
 			}
 			else
 			{
 				ret = av_read_frame( context, &pkt );
 				if ( ret >= 0 && !self->seekable && pkt.stream_index == self->video_index )
 				{
-					mlt_deque_push_back(self->vpackets, av_packet_clone(&pkt));
+					mlt_deque_push_back( self->vpackets, av_packet_clone(&pkt) );
 				}
 				else if ( ret < 0 )
 				{
@@ -3083,12 +3086,12 @@ static void producer_avformat_close( producer_avformat self )
 
 	// Cleanup av contexts
 	av_packet_unref( &self->pkt );
-	av_free( self->video_frame );
-	av_free( self->audio_frame );
+	av_frame_unref( self->video_frame );
+	av_frame_unref( self->audio_frame );
 
-#if USE_VAAPI
-	av_free(self->sw_video_frame);
-	av_buffer_unref(&self->hw_device_ctx);
+#if USE_HWACCEL
+	av_frame_unref( self->sw_video_frame );
+	av_buffer_unref( &self->hw_device_ctx );
 #endif
 
 	if ( self->is_mutex_init )
