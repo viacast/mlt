@@ -395,7 +395,7 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 			char *scte_104 = argv[ ++i ];
 			if ( producer != NULL ) 
 			{
-				mlt_properties_set(MLT_PRODUCER_PROPERTIES(producer), "scte-104", scte_104);
+				mlt_properties_set(MLT_PRODUCER_PROPERTIES(producer), "meta.scte-104", scte_104);
 			}
 		}
 		else if ( !strcmp( argv[ i ], "-track" ) ||

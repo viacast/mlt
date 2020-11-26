@@ -877,6 +877,7 @@ done:
 			}
 
 			insert_vanc(vanc, &vanc_lines);
+
 exit_scte104:
 			if (vanc)
 				vanc->Release();
@@ -1021,9 +1022,9 @@ exit_scte104:
 				mlt_log_error( getConsumer(), "%s:%d: ScheduleVideoFrame failed, hr=%.8X \n", __FUNCTION__, __LINE__, unsigned(hr) );
 			}
 			else {
-				mlt_deque_push_back( m_frames_interim, decklinkFrame );
 				mlt_log_debug( getConsumer(), "%s: ScheduleVideoFrame SUCCESS\n", __FUNCTION__ );
 			}
+			mlt_deque_push_back( m_frames_interim, decklinkFrame );
 		}
 	}
 

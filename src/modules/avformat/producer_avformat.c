@@ -140,7 +140,6 @@ struct producer_avformat_s
 	AVBufferRef* hw_device_ctx;
 	AVFrame* sw_video_frame;
 #endif
-	char scte_104[2051];
 };
 typedef struct producer_avformat_s *producer_avformat;
 
@@ -1800,7 +1799,6 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 				}
 				pthread_mutex_unlock( &self->packets_mutex );
 			}
-
 			// We only deal with video from the selected video_index
 			if ( self->pkt.stream_index == self->video_index )
 			{
@@ -1902,13 +1900,6 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 										break;
 									}
 								}
-							}
-							
-							if (self->scte_104) 
-							{
-								char scte[2051];
-								strcpy(scte, self->scte_104);
-								mlt_properties_set(MLT_PRODUCER_PROPERTIES(self->parent), "meta.scte-104", scte);
 							}
 							got_picture = 1;
 							decode_errors = 0;
@@ -2168,9 +2159,6 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 			mlt_log_warning( MLT_PRODUCER_SERVICE( self->parent ), "failed to find hw_pix_fmt\n" );
 		}
 #endif
-
-		if (mlt_properties_get(properties, "scte-104"))
-			strcpy(self->scte_104, mlt_properties_get(properties, "scte-104"));
 
 		// If we don't have a codec and we can't initialise it, we can't do much more...
 		pthread_mutex_lock( &self->open_mutex );

@@ -649,6 +649,13 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 
 		// Copy the fps and speed of the producer onto the frame
 		properties = MLT_FRAME_PROPERTIES( *frame );
+
+		char *scte = mlt_properties_get( MLT_PRODUCER_PROPERTIES( self ), "meta.scte-104" );
+		if (scte && strlen(scte)) {
+			mlt_properties_set(properties, "meta.scte-104", scte);
+			mlt_log_warning(NULL, "producer:scte-104:%s\n", scte);
+		}
+
 		mlt_properties_set_double( properties, "_speed", speed );
 		mlt_properties_set_int( properties, "test_audio", mlt_frame_is_test_audio( *frame ) );
 		mlt_properties_set_int( properties, "test_image", mlt_frame_is_test_card( *frame ) );
