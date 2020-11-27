@@ -549,9 +549,9 @@ static char* parse_url( mlt_profile profile, const char* URL, AVInputFormat **fo
 		mlt_log_debug( NULL, "%s: protocol=%s resource=%s\n", __FUNCTION__, protocol, url );
 
 		// Lookup the format
-		*format = av_find_input_format( protocol );
+		// *format = av_find_input_format( protocol );
 
-		if ( *format )
+		// if ( *format )
 		{
 			// Eat the format designator
 			char *result = url;
@@ -823,8 +823,6 @@ static int producer_open(producer_avformat self, mlt_profile profile, const char
 			apply_properties( self->video_format->priv_data, properties, AV_OPT_FLAG_DECODING_PARAM );
 	}
 
-	av_dict_free( &params );
-
 	// If successful, then try to get additional info
 	if ( !error && self->video_format )
 	{
@@ -843,11 +841,21 @@ static int producer_open(producer_avformat self, mlt_profile profile, const char
 			self->last_position = POSITION_INITIAL;
 
 #if USE_HWACCEL
-			// TODO: switch case by query string
-			self->hw_pix_fmt = AV_PIX_FMT_VAAPI;
-			self->hw_device_type = AV_HWDEVICE_TYPE_VAAPI;
-			char *device = "/dev/dri/renderD128";
-			memcpy(self->hw_device, device, strlen(device));
+			AVDictionaryEntry *hwaccel = av_dict_get( params, "hwaccel", NULL, 0 );
+			if ( hwaccel && hwaccel->value ) 
+			{
+				if ( !strcmp( hwaccel->value, "vaapi" ) ) 
+				{
+					self->hw_pix_fmt = AV_PIX_FMT_VAAPI;
+					self->hw_device_type = AV_HWDEVICE_TYPE_VAAPI;
+					char *device = "/dev/dri/renderD128";
+					memcpy( self->hw_device, device, strlen( device ) );
+				}
+				else
+				{
+					// TODO: init other hardware types
+				}
+			}
 #endif
 
 			if ( !self->audio_format )
@@ -918,6 +926,7 @@ static int producer_open(producer_avformat self, mlt_profile profile, const char
 			}
 		}
 	}
+	av_dict_free( &params );
 	free( filename );
 	if ( !error )
 	{
@@ -2125,6 +2134,12 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 			codec_context->thread_count = thread_count;
 
 #if USE_HWACCEL
+		if ( !strlen(self->hw_device) || self->hw_device_type == AV_HWDEVICE_TYPE_NONE || self->hw_pix_fmt == AV_PIX_FMT_NONE ) 
+		{
+			mlt_log_info( MLT_PRODUCER_SERVICE( self->parent ), "missing hwaccel parameters. skipping hardware initialization\n" );
+			goto skip_hwaccel;
+		}
+
 		int found_hw_pix_fmt = 0, i;
 		for ( i = 0;; i++ ) 
 		{
@@ -2158,6 +2173,8 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 		{
 			mlt_log_warning( MLT_PRODUCER_SERVICE( self->parent ), "failed to find hw_pix_fmt\n" );
 		}
+
+		skip_hwaccel:
 #endif
 
 		// If we don't have a codec and we can't initialise it, we can't do much more...
