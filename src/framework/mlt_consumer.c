@@ -893,7 +893,7 @@ static void *consumer_read_ahead_thread( void *arg )
 				char *preview_file = mlt_properties_get(properties, "preview_file");
 				if (preview_file) {
 					char vu_file[strlen(preview_file) + 5];
-					sprintf(vu_file, "%s.vu", preview_file);
+					snprintf(vu_file, strlen(preview_file) + 5, "%s.vu", preview_file);
 					priv->shared_mem_audio = create_shared_memory(vu_file, 1 << 10);
 				}
 			}

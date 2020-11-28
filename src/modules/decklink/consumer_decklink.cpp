@@ -664,7 +664,7 @@ exit_create_ancillary_data:
 
 			for (int i = 0; i < size; ++i) {
 					char key[32];
-					sprintf(key, "meta.cc-data-%d", i);
+					snprintf(key, 32, "meta.cc-data-%d", i);
 					data[i] = mlt_properties_get_int(MLT_FRAME_PROPERTIES(frame), key);
 			}
 

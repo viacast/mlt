@@ -52,7 +52,6 @@
 #define USE_HWACCEL 1
 #if USE_HWACCEL
 #include <libavutil/hwcontext.h>
-#include <libavutil/pixfmt.h>
 #include <libavcodec/packet.h>
 #endif
 
@@ -1786,8 +1785,12 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					}
 					else if ( ret < 0 )
 					{
-						if ( ret != AVERROR_EOF )
-							mlt_log_verbose( MLT_PRODUCER_SERVICE( producer ), "av_read_frame returned error %d inside get_image\n", ret );
+						if ( ret == AVERROR_EOF ) {
+							pthread_mutex_unlock( &self->packets_mutex );
+							break;
+						} else {
+							mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), "av_read_frame returned error %d inside get_image\n", ret );
+						}
 						if ( !self->video_seekable && mlt_properties_get_int( properties, "reconnect" ) )
 						{
 							// Try to reconnect to live sources by closing context and codecs,
@@ -1897,7 +1900,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 
 										for (int j = 0; j < sd->size; ++j) {
 											char key[32];
-											sprintf(key, "meta.cc-data-%d", j);
+											snprintf(key, 32, "meta.cc-data-%d", j);
 											mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), key, sd->data[j]);
 										}
 
