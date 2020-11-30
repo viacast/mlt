@@ -548,9 +548,9 @@ static char* parse_url( mlt_profile profile, const char* URL, AVInputFormat **fo
 		mlt_log_debug( NULL, "%s: protocol=%s resource=%s\n", __FUNCTION__, protocol, url );
 
 		// Lookup the format
-		// *format = av_find_input_format( protocol );
+		*format = av_find_input_format( protocol );
 
-		// if ( *format )
+		if ( *format )
 		{
 			// Eat the format designator
 			char *result = url;
@@ -840,21 +840,25 @@ static int producer_open(producer_avformat self, mlt_profile profile, const char
 			self->last_position = POSITION_INITIAL;
 
 #if USE_HWACCEL
-			AVDictionaryEntry *hwaccel = av_dict_get( params, "hwaccel", NULL, 0 );
-			if ( hwaccel && hwaccel->value ) 
-			{
-				if ( !strcmp( hwaccel->value, "vaapi" ) ) 
-				{
-					self->hw_pix_fmt = AV_PIX_FMT_VAAPI;
-					self->hw_device_type = AV_HWDEVICE_TYPE_VAAPI;
-					char *device = "/dev/dri/renderD128";
-					memcpy( self->hw_device, device, strlen( device ) );
-				}
-				else
-				{
-					// TODO: init other hardware types
-				}
-			}
+			self->hw_pix_fmt = AV_PIX_FMT_VAAPI;
+			self->hw_device_type = AV_HWDEVICE_TYPE_VAAPI;
+			char *device = "/dev/dri/renderD128";
+			memcpy( self->hw_device, device, strlen( device ) );
+			// AVDictionaryEntry *hwaccel = av_dict_get( params, "hwaccel", NULL, 0 );
+			// if ( hwaccel && hwaccel->value ) 
+			// {
+			// 	if ( !strcmp( hwaccel->value, "vaapi" ) ) 
+			// 	{
+			// 		self->hw_pix_fmt = AV_PIX_FMT_VAAPI;
+			// 		self->hw_device_type = AV_HWDEVICE_TYPE_VAAPI;
+			// 		char *device = "/dev/dri/renderD128";
+			// 		memcpy( self->hw_device, device, strlen( device ) );
+			// 	}
+			// 	else
+			// 	{
+			// 		// TODO: init other hardware types
+			// 	}
+			// }
 #endif
 
 			if ( !self->audio_format )
