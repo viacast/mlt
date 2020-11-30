@@ -1,6 +1,6 @@
 CFLAGS += -I../..
 
-LDFLAGS += -L../../framework -lmlt -lpthread
+LDFLAGS += -L../../framework -lmlt -lpthread -lklvanc
 
 include ../../../config.mak
 
