@@ -37,3 +37,6 @@ src/examples/play
 *.dot
 *.rej
 
+src/swig/python/mlt.i
+src/swig/python/mlt.py
+src/swig/.python
