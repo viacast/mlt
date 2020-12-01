@@ -1902,6 +1902,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 										mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), "meta.frame-id", ++frame_id);
 										mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(self->parent), "meta.cc-size", sd->size);
 
+										// this was done to circumvent some issues with converting from char array in consumer
 										for (int j = 0; j < sd->size; ++j) {
 											char key[32];
 											snprintf(key, 32, "meta.cc-data-%d", j);

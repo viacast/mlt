@@ -60,6 +60,8 @@ extern "C"
 #include "mlt_version.h"
 #include "mlt_slices.h"
 
+#define LOG_LINE mlt_log_warning(NULL,"%d\n",__LINE__)
+
 #ifdef __cplusplus
 }
 #endif
