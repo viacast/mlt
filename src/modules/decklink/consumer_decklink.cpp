@@ -547,8 +547,9 @@ protected:
 
 		mlt_log_debug( getConsumer(), "%s: starting\n", __FUNCTION__ );
 
-    klvanc_context_destroy(m_vanc_ctx);
-		m_vanc_ctx = NULL;
+		// if (m_vanc_ctx)
+    	// klvanc_context_destroy(m_vanc_ctx);
+		// m_vanc_ctx = NULL;
 
 		// Stop the audio and video output streams immediately
 		if ( m_deckLinkOutput )
