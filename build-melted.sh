@@ -308,7 +308,7 @@ function set_globals {
   if test "$FFMPEG_SUPPORT_MP3" = 1 && test "$ENABLE_LAME" = 1; then
       SUBDIRS="lame $SUBDIRS"
   fi
-  SUBDIRS="mlt melted"
+  # SUBDIRS="mlt melted"
   debug "SUBDIRS = $SUBDIRS"
 
   # REPOLOCS Array holds the repo urls
