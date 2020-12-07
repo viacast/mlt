@@ -168,6 +168,8 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 			!strcmp( argv[ i ], "-filter" ) ||
 			!strcmp( argv[ i ], "-transition" ) ||
 			!strcmp( argv[ i ], "-scte-104" ) ||
+			!strcmp( argv[ i ], "-in" ) ||
+			!strcmp( argv[ i ], "-out" ) ||
 			!strcmp( argv[ i ], "-blank" ) ) )
 		{
 			fprintf( stderr, "Argument missing for %s.\n", argv[ i ] );
@@ -396,6 +398,22 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 			if ( producer != NULL ) 
 			{
 				mlt_properties_set(MLT_PRODUCER_PROPERTIES(producer), "meta.scte-104", scte_104);
+			}
+		}
+		else if ( !strcmp( argv[ i ], "-in" ) )
+		{
+			int in = atoi(argv[ ++i ]);
+			if ( producer != NULL ) 
+			{
+				mlt_producer_set_in_and_out( producer, in, -1 );
+			}
+		}
+		else if ( !strcmp( argv[ i ], "-out" ) )
+		{
+			int out = atoi(argv[ ++i ]);
+			if ( producer != NULL ) 
+			{
+				mlt_producer_set_in_and_out( producer, -1, out );
 			}
 		}
 		else if ( !strcmp( argv[ i ], "-track" ) ||
