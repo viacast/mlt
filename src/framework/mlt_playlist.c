@@ -504,6 +504,22 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 	if ( original == total - 2 )
 		mlt_events_fire( properties, "playlist-next", i, NULL );
 
+	// Ideally this should be set as late as possible,
+	// since if we seek to another clip, this isn't reset.
+	// This could be solved by using another prop
+	// to set the clip index (e.g. "pause-index").
+	char *pause = mlt_properties_get(properties, "pause");
+
+	if (original == total - 1 && pause && !strcmp(pause, "end")) {
+		mlt_properties_set(properties, "pause", "none");
+		mlt_producer_set_speed(self, 0);
+	}
+
+	if (position == 0 && pause && !strcmp(pause, "start")) {
+		mlt_properties_set(properties, "pause", "none");
+		mlt_producer_set_speed(self, 0);
+	}
+
 	return MLT_PRODUCER_SERVICE( producer );
 }
 
