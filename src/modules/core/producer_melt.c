@@ -400,6 +400,15 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 				mlt_properties_set(MLT_PRODUCER_PROPERTIES(producer), "meta.scte-104", scte_104);
 			}
 		}
+		else if ( !strcmp( argv[ i ], "-in-out" ) )
+		{
+			int in = atoi(argv[ ++i ]);
+			int out = atoi(argv[ ++i ]);
+			if ( producer != NULL ) 
+			{
+				mlt_producer_set_in_and_out( producer, in, out );
+			}
+		}
 		else if ( !strcmp( argv[ i ], "-in" ) )
 		{
 			int in = atoi(argv[ ++i ]);
