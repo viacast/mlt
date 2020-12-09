@@ -1765,9 +1765,9 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 		if ( !self->sw_video_frame )
 			self->sw_video_frame = av_frame_alloc();
 #endif
-		while ( ( self->video_send_result >= 0 || self->video_send_result == AVERROR( EAGAIN ) ) && !got_picture )
+		while ( ( self->video_send_result >= 0 || self->video_send_result == AVERROR( EAGAIN ) || self->video_send_result == AVERROR_EOF ) && !got_picture )
 		{
-			if ( self->video_send_result != AVERROR( EAGAIN ) ) 
+			if ( self->video_send_result != AVERROR( EAGAIN ) && self->video_send_result != AVERROR_EOF ) 
 			{
 				// Read a packet
 				if ( self->pkt.stream_index == self->video_index )
@@ -1789,12 +1789,13 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					}
 					else if ( ret < 0 )
 					{
-						if ( ret == AVERROR_EOF ) {
-							pthread_mutex_unlock( &self->packets_mutex );
-							break;
-						} else {
+						// if ( ret == AVERROR_EOF ) {
+						// 	self->video_send_result = -1;
+						// 	pthread_mutex_unlock( &self->packets_mutex );
+						// 	break;
+						// } else {
 							mlt_log_verbose( MLT_PRODUCER_SERVICE(producer), "av_read_frame returned error %d inside get_image\n", ret );
-						}
+						// }
 						if ( !self->video_seekable && mlt_properties_get_int( properties, "reconnect" ) )
 						{
 							// Try to reconnect to live sources by closing context and codecs,
@@ -1856,7 +1857,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 					self->video_send_result = avcodec_send_packet( codec_context, &self->pkt );
 					mlt_log_debug( MLT_PRODUCER_SERVICE( producer ), "decoded packet with size %d => %d\n", self->pkt.size, self->video_send_result );
 					// Note: decode may fail at the beginning of MPEGfile (B-frames referencing before first I-frame), so allow a few errors.
-					if (self->video_send_result < 0 && self->video_send_result != AVERROR(EAGAIN))
+					if (self->video_send_result < 0 && self->video_send_result != AVERROR(EAGAIN) && self->video_send_result != AVERROR_EOF)
 					{
 						mlt_log_warning( MLT_PRODUCER_SERVICE( producer ), "avcodec_send_packet failed with %d\n", self->video_send_result );
 					}
@@ -1880,7 +1881,7 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 								if( transfer_data_result < 0 ) 
 								{
 									mlt_log_error( MLT_PRODUCER_SERVICE( producer ), "av_hwframe_transfer_data() failed %d\n", transfer_data_result );
-									return -1;
+									goto exit_get_image;
 								}
 								av_frame_copy_props( self->sw_video_frame, self->video_frame );
 								self->sw_video_frame->width = self->video_frame->width;
@@ -2065,10 +2066,7 @@ exit_get_image:
 				(codec_params->field_order == AV_FIELD_PROGRESSIVE ||
 				 codec_params->field_order == AV_FIELD_UNKNOWN) );
 	}
-	av_frame_unref( self->video_frame );
-#if USE_HWACCEL
-	av_frame_unref( self->sw_video_frame );
-#endif
+
 	// Set the field order property for this frame
 	if ( mlt_properties_get( properties, "force_tff" ) )
 		mlt_properties_set_int( frame_properties, "top_field_first", !!mlt_properties_get_int( properties, "force_tff" ) );
@@ -2080,6 +2078,11 @@ exit_get_image:
 	mlt_properties_set_int( properties, "meta.media.top_field_first", self->top_field_first );
 	mlt_properties_set_int( properties, "meta.media.progressive", mlt_properties_get_int( frame_properties, "progressive" ) );
 	mlt_service_unlock( MLT_PRODUCER_SERVICE( producer ) );
+	
+	av_frame_unref( self->video_frame );
+#if USE_HWACCEL
+	av_frame_unref( self->sw_video_frame );
+#endif
 
 	mlt_log_timings_end( NULL, __FUNCTION__ );
 
