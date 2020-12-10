@@ -81,6 +81,7 @@ typedef struct
 	pthread_t *threads; /**< used to deallocate all threads */
 	SharedMemory *shared_mem_frame;
 	SharedMemory *shared_mem_audio;
+	mlt_filter audio_level;
 }
 consumer_private;
 
@@ -890,6 +891,7 @@ static void *consumer_read_ahead_thread( void *arg )
 			mlt_frame_get_audio( frame, &audio, &priv->audio_format, &priv->frequency, &priv->channels, &samples );
 
 			if (!priv->shared_mem_audio) {
+				priv->audio_level = mlt_factory_filter( NULL, "audiolevel", NULL );
 				char *preview_file = mlt_properties_get(properties, "preview_file");
 				if (preview_file) {
 					char vu_file[strlen(preview_file) + 5];
@@ -897,28 +899,17 @@ static void *consumer_read_ahead_thread( void *arg )
 					priv->shared_mem_audio = create_shared_memory(vu_file, 1 << 10);
 				}
 			}
-
-			if (audio && priv->shared_mem_audio && (priv->audio_format == mlt_audio_s16 || priv->audio_format == mlt_audio_s32)) {
+	
+			if (audio && priv->shared_mem_audio && priv->audio_level) {
+				priv->audio_level->process(priv->audio_level, frame);
 				uint8_t audio_samples[priv->channels + 1]; // first byte is reserved for # of channels
 				audio_samples[0] = priv->channels;
 				memset(audio_samples + 1, 0, priv->channels);
 
-				int16_t *frame16;
-				int32_t *frame32;
-				uint8_t sample;
-
-				for (int i = 0; i < samples; ++i) {
-					frame16 = ((int16_t *)audio) + i*priv->channels;
-					frame32 = ((int32_t *)audio) + i*priv->channels;
-
-					for (int j = 0; j < priv->channels; ++j) {
-						if (priv->audio_format == mlt_audio_s16)
-							sample = (100*abs(frame16[j]))/(1 << 15);
-						else if (priv->audio_format == mlt_audio_s32)
-							sample = (100*abs(frame32[j]))/(1 << 31);
-						if (sample > audio_samples[j+1])
-							audio_samples[j+1] = sample;
-					}
+				for (int i = 0; i < priv->channels; ++i) {
+					char key[50];
+					snprintf(key, 50, "_audio_level.%d", i);
+					audio_samples[i+1] = MIN(255, 255*mlt_properties_get_double(MLT_FILTER_PROPERTIES(priv->audio_level), key));
 				}
 
 				if (write_shared_memory(priv->shared_mem_audio, (void *)audio_samples, sizeof(audio_samples[0])*(priv->channels + 1))) {
