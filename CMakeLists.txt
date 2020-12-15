@@ -1,6 +1,6 @@
+cmake_minimum_required(VERSION 3.14)
 project(MLT)
-set(MLT_VERSION 6.23.0)
-cmake_minimum_required(VERSION 3.10)
+set(MLT_VERSION 6.25.0)
 find_package(PkgConfig REQUIRED)
 include(GNUInstallDirs)
 option(GPL "Enable GPLv2 modules" ON)
@@ -23,18 +23,19 @@ elseif(MSVC)
     add_compile_options(/fp:fast)
 endif()
 find_package(Threads REQUIRED)
-find_package(FFTW QUIET)
-if(NOT FFTW_FOUND)
-    pkg_check_modules(FFTW fftw3)
+if (WIN32 AND NOT CMAKE_DL_LIBS)
+    find_package(dlfcn-win32 REQUIRED)
+    set(CMAKE_DL_LIBS dlfcn-win32::dl)
 endif()
+pkg_check_modules(FFTW IMPORTED_TARGET fftw3)
 if(NOT FFTW_FOUND)
-    pkg_check_modules(FFTW fftw)
+    pkg_check_modules(FFTW IMPORTED_TARGET fftw)
 endif()
 pkg_check_modules(xml IMPORTED_TARGET libxml-2.0)
 add_subdirectory(src/framework)
 add_subdirectory(src/melt)
 add_subdirectory(src/mlt++)
-#add_subdirectory(src/swig)
+add_subdirectory(src/swig)
 #file(GLOB modules src/modules/*/)
 set(modules
     src/modules/avformat
@@ -56,6 +57,7 @@ set(modules
     src/modules/resample
     src/modules/rubberband
     src/modules/rtaudio
+    src/modules/sdl
     src/modules/sdl2
     src/modules/sox
     src/modules/vid.stab

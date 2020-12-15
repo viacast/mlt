@@ -40,3 +40,10 @@ src/examples/play
 src/swig/python/mlt.i
 src/swig/python/mlt.py
 src/swig/.python
+.project
+*.qmake.stash
+src/tests/Makefile
+src/tests/*/*
+!src/tests/*/*.cpp
+!src/tests/*/*.pro
+build
