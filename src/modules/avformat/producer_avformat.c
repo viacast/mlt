@@ -1886,7 +1886,6 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 								if( transfer_data_result < 0 ) 
 								{
 									mlt_log_error( MLT_PRODUCER_SERVICE( producer ), "av_hwframe_transfer_data() failed %d\n", transfer_data_result );
-									mlt_service_unlock(MLT_PRODUCER_SERVICE(producer));
 									goto exit_get_image;
 								}
 								av_frame_copy_props( self->sw_video_frame, self->video_frame );
@@ -2143,7 +2142,8 @@ static int video_codec_init( producer_avformat self, int index, mlt_properties p
 		}
 
 		// Initialise multi-threading
-		int thread_count = mlt_properties_get_int( properties, "threads" );
+		// int thread_count = mlt_properties_get_int( properties, "threads" );
+		int thread_count = 1;
 		if ( thread_count == 0 && getenv( "MLT_AVFORMAT_THREADS" ) )
 			thread_count = atoi( getenv( "MLT_AVFORMAT_THREADS" ) );
 		if ( thread_count >= 0 )
