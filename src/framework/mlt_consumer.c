@@ -889,33 +889,6 @@ static void *consumer_read_ahead_thread( void *arg )
 		{
 			samples = mlt_audio_calculate_frame_samples( priv->fps, priv->frequency, priv->aud_counter++ );
 			mlt_frame_get_audio( frame, &audio, &priv->audio_format, &priv->frequency, &priv->channels, &samples );
-
-			if (!priv->shared_mem_audio) {
-				priv->audio_level = mlt_factory_filter( NULL, "audiolevel", NULL );
-				char *preview_file = mlt_properties_get(properties, "preview_file");
-				if (preview_file) {
-					char vu_file[strlen(preview_file) + 5];
-					snprintf(vu_file, strlen(preview_file) + 5, "%s.vu", preview_file);
-					priv->shared_mem_audio = create_shared_memory(vu_file, 1 << 10);
-				}
-			}
-	
-			if (audio && priv->shared_mem_audio && priv->audio_level) {
-				priv->audio_level->process(priv->audio_level, frame);
-				uint8_t audio_samples[priv->channels + 1]; // first byte is reserved for # of channels
-				audio_samples[0] = priv->channels;
-				memset(audio_samples + 1, 0, priv->channels);
-
-				for (int i = 0; i < priv->channels; ++i) {
-					char key[50];
-					snprintf(key, 50, "_audio_level.%d", i);
-					audio_samples[i+1] = MIN(255, 255*mlt_properties_get_double(MLT_FILTER_PROPERTIES(priv->audio_level), key));
-				}
-
-				if (write_shared_memory(priv->shared_mem_audio, (void *)audio_samples, sizeof(audio_samples[0])*(priv->channels + 1))) {
-					mlt_log_warning(NULL, "failed to write to shared memory\n");
-				}
-			}
 		}
 
 		// All non-normal playback frames should be shown
@@ -1591,6 +1564,10 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 	mlt_properties properties = MLT_CONSUMER_PROPERTIES( self );
 	consumer_private *priv = self->local;
 
+	int audio_off = mlt_properties_get_int( properties, "audio_off" );
+	int samples = 0;
+	void *audio = NULL;
+
 	// Check if the user has requested real time or not
 	if ( priv->real_time > 1 || priv->real_time < -1 )
 	{
@@ -1657,7 +1634,17 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 		}
 	}
 
-	if (priv->shared_mem_frame && frame) {
+	if (!priv->shared_mem_audio) {
+		priv->audio_level = mlt_factory_filter( NULL, "audiolevel", NULL );
+		char *preview_file = mlt_properties_get(properties, "preview_file");
+		if (preview_file) {
+			char vu_file[strlen(preview_file) + 5];
+			snprintf(vu_file, strlen(preview_file) + 5, "%s.vu", preview_file);
+			priv->shared_mem_audio = create_shared_memory(vu_file, 1 << 10);
+		}
+	}
+
+	if (frame && priv->shared_mem_frame) {
 		uint8_t *image;
 		int width = mlt_properties_get_int(properties, "width");
 		int height = mlt_properties_get_int(properties, "height");
@@ -1685,6 +1672,26 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 				mlt_log_warning(NULL, "failed to write to shared memory\n");
 			}
 			free(data);
+		}
+	}
+
+	if (!audio_off && priv->shared_mem_audio && priv->audio_level) {
+		samples = mlt_audio_calculate_frame_samples( priv->fps, priv->frequency, priv->aud_counter );
+		mlt_frame_get_audio( frame, &audio, &priv->audio_format, &priv->frequency, &priv->channels, &samples );
+
+		priv->audio_level->process(priv->audio_level, frame);
+		uint8_t audio_samples[priv->channels + 1]; // first byte is reserved for # of channels
+		audio_samples[0] = priv->channels;
+		memset(audio_samples + 1, 0, priv->channels);
+
+		for (int i = 0; i < priv->channels; ++i) {
+			char key[50];
+			snprintf(key, 50, "_audio_level.%d", i);
+			audio_samples[i+1] = MIN(255, 255*mlt_properties_get_double(MLT_FILTER_PROPERTIES(priv->audio_level), key));
+		}
+
+		if (write_shared_memory(priv->shared_mem_audio, (void *)audio_samples, sizeof(audio_samples[0])*(priv->channels + 1))) {
+			mlt_log_warning(NULL, "failed to write to shared memory\n");
 		}
 	}
 
