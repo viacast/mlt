@@ -513,6 +513,19 @@ static int generate_test_image( mlt_properties properties, uint8_t **buffer,  ml
 	{
 		int size = 0;
 
+		uint16_t color_yuv = 0x0080; // 0,128 -> black
+
+		char *color = getenv("MLT_BACKGROUND_COLOR");
+
+		if (color) {
+			if (!strcmp(color, "white"))
+				color_yuv = 0xEB80; // 235,128 -> white
+			else if (!strcmp(color, "green"))
+				color_yuv = 0x0000; // 0,0 -> green
+			else
+				color_yuv = 0x0080;
+		}
+
 		*width = *width == 0 ? 720 : *width;
 		*height = *height == 0 ? 576 : *height;
 		size = *width * *height;
@@ -553,8 +566,8 @@ static int generate_test_image( mlt_properties properties, uint8_t **buffer,  ml
 					register uint8_t *q = p + size;
 					while ( p != NULL && p != q )
 					{
-						*p ++ = 235;
-						*p ++ = 128;
+						*p ++ = color_yuv >> 8;
+						*p ++ = color_yuv & 0xFF;
 					}
 				}
 				break;
@@ -568,11 +581,11 @@ static int generate_test_image( mlt_properties properties, uint8_t **buffer,  ml
 					uint8_t* planes[4];
 					int h = *height;
 					mlt_image_format_planes( *format, *width, *height, *buffer, planes, strides );
-					memset(planes[0], 235, h * strides[0]);
+					memset(planes[0], color_yuv >> 8, h * strides[0]);
 					if ( *format == mlt_image_yuv420p )
 						h /= 2;
-					memset(planes[1], 128, h * strides[1]);
-					memset(planes[2], 128, h * strides[2]);
+					memset(planes[1], color_yuv & 0xFF, h * strides[1]);
+					memset(planes[2], color_yuv & 0xFF, h * strides[2]);
 				}
 				break;
 			default:

@@ -396,7 +396,7 @@ function set_globals {
 
   #####
   # ffmpeg
-  CONFIG[0]="./configure --prefix=$FINAL_INSTALL_DIR --disable-doc --enable-gpl --enable-version3 --enable-shared --enable-debug --enable-pthreads --enable-runtime-cpudetect --enable-nonfree --enable-decklink --enable-libklvanc"
+  CONFIG[0]="./configure --prefix=$FINAL_INSTALL_DIR --disable-doc --enable-gpl --enable-version3 --enable-shared --enable-pthreads --enable-runtime-cpudetect --enable-nonfree --enable-decklink --enable-libklvanc"
   if test 1 = "$FFMPEG_SUPPORT_THEORA" ; then
     CONFIG[0]="${CONFIG[0]} --enable-libtheora --enable-libvorbis"
   fi
@@ -414,7 +414,7 @@ function set_globals {
   fi
   # Add optional parameters
   CONFIG[0]="${CONFIG[0]} $FFMPEG_ADDITIONAL_OPTIONS"
-  CFLAGS_[0]="-I$FINAL_INSTALL_DIR/include -I$HOME/ffmpeg_sources/BMD_SDK/include $CFLAGS"
+  CFLAGS_[0]="-I$FINAL_INSTALL_DIR/include -I$HOME/ffmpeg_sources/BMD_SDK/include -std=gnu++11 -std=gnu99 $CFLAGS"
   LDFLAGS_[0]="-L$FINAL_INSTALL_DIR/lib $LDFLAGS"
 
   #####
@@ -437,7 +437,7 @@ function set_globals {
   #####
   # melted
   CONFIG[2]="./configure --prefix=$FINAL_INSTALL_DIR --enable-gpl"
-  CFLAGS_[2]="-I$FINAL_INSTALL_DIR/include $CFLAGS"
+  CFLAGS_[2]="-I$FINAL_INSTALL_DIR/include -std=gnu++11 -std=gnu99 $CFLAGS"
   LDFLAGS_[2]="-L$FINAL_INSTALL_DIR/lib $LDFLAGS"
   
   ####
@@ -1219,9 +1219,12 @@ function main {
 
   date=`date +'%Y%m%d'`
   
-  cp /root/melted/melted.conf /root/melted/$date/etc/
+  cp /root/melted/melted.conf* /root/melted/$date/etc/
+  cp /root/melted/start-melted.conf /root/melted/$date/etc/
   cp /root/melted/preview/preview-feed /root/melted/$date/bin/
   cp /root/melted/preview/start-video-preview.sh /root/melted/$date/
+  cp /root/melted/start-melted-server /root/melted/$date/
+  cp /root/melted/source-me /root/melted/$date/
   # All is well, that ends well
   exit 0
 }
