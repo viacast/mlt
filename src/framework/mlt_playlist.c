@@ -509,7 +509,7 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 	// This could be solved by using another prop
 	// to set the clip index (e.g. "pause-index").
 	char *pause = mlt_properties_get(properties, "pause");
-	int pause_start = pause && !strcmp(pause, "start") && position != 0;
+	int pause_start = pause && !strcmp(pause, "start") && position == 0;
 	int pause_end = pause && !strcmp(pause, "end") && original == total - 1;
 	if (pause_start || pause_end) {
 		mlt_properties_set(properties, "pause", NULL);
