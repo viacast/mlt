@@ -52,7 +52,6 @@
 #define USE_HWACCEL 1
 #if USE_HWACCEL
 #include <libavutil/hwcontext.h>
-#include <libavcodec/packet.h>
 #endif
 
 #ifdef AVFILTER
@@ -236,35 +235,29 @@ int list_components( char* file )
 	if ( file && strstr( file, "f-list" ) )
 	{
 		fprintf( stderr, "---\nformats:\n" );
-		void *state = NULL;
-		const AVInputFormat *format = NULL;
-		while ((format = av_demuxer_iterate(&state))) {
+		AVInputFormat *format = NULL;
+		while ( ( format = av_iformat_next( format ) ) )
 			fprintf( stderr, "  - %s\n", format->name );
-		}
 		fprintf( stderr, "...\n" );
 		skip = 1;
 	}
 	if ( file && strstr( file, "acodec-list" ) )
 	{
 		fprintf( stderr, "---\naudio_codecs:\n" );
-		void *state = NULL;
-		const AVCodec *codec = NULL;
-		while ((codec = av_codec_iterate(&state))) {
+		AVCodec *codec = NULL;
+		while ( ( codec = av_codec_next( codec ) ) )
 			if ( codec->decode && codec->type == AVMEDIA_TYPE_AUDIO )
 				fprintf( stderr, "  - %s\n", codec->name );
-		}
 		fprintf( stderr, "...\n" );
 		skip = 1;
 	}
 	if ( file && strstr( file, "vcodec-list" ) )
 	{
 		fprintf( stderr, "---\nvideo_codecs:\n" );
-		void *state = NULL;
-		const AVCodec *codec = NULL;
-		while ((codec = av_codec_iterate(&state))) {
+		AVCodec *codec = NULL;
+		while ( ( codec = av_codec_next( codec ) ) )
 			if ( codec->decode && codec->type == AVMEDIA_TYPE_VIDEO )
 				fprintf( stderr, "  - %s\n", codec->name );
-		}
 		fprintf( stderr, "...\n" );
 		skip = 1;
 	}
