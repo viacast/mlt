@@ -1143,7 +1143,7 @@ static int seek_video( producer_avformat self, mlt_position position,
 			// Remove the cached info relating to the previous position
 			self->current_position = POSITION_INVALID;
 			self->last_position = POSITION_INVALID;
-			av_freep( &self->video_frame );
+			av_frame_unref(self->video_frame);
 		}
 	}
 	pthread_mutex_unlock( &self->packets_mutex );
@@ -1759,6 +1759,8 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 		// Construct an AVFrame for YUV422 conversion
 		if ( !self->video_frame )
 			self->video_frame = av_frame_alloc();
+		else
+			av_frame_unref( self->video_frame );
 #if USE_HWACCEL
 		if ( !self->sw_video_frame )
 			self->sw_video_frame = av_frame_alloc();
@@ -2051,6 +2053,9 @@ static int producer_get_image( mlt_frame frame, uint8_t **buffer, mlt_image_form
 	self->video_expected = position + 1;
 
 exit_get_image:
+#if USE_HWACCEL
+	av_frame_unref( self->sw_video_frame );
+#endif
 	pthread_mutex_unlock( &self->video_mutex );
 
 	// Set the progressive flag
@@ -2074,11 +2079,6 @@ exit_get_image:
 	mlt_properties_set_int( properties, "meta.media.progressive", mlt_properties_get_int( frame_properties, "progressive" ) );
 	mlt_service_unlock( MLT_PRODUCER_SERVICE( producer ) );
 	
-	av_frame_unref( self->video_frame );
-#if USE_HWACCEL
-	av_frame_unref( self->sw_video_frame );
-#endif
-
 	mlt_log_timings_end( NULL, __FUNCTION__ );
 
 	return !got_picture;
