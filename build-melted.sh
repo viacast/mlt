@@ -312,12 +312,12 @@ function set_globals {
   debug "SUBDIRS = $SUBDIRS"
 
   # REPOLOCS Array holds the repo urls
-  REPOLOCS[0]="git://github.com/FFmpeg/FFmpeg.git"
-  REPOLOCS[1]="https://github.com/gabrieljablonski/mlt"
+  REPOLOCS[0]="https://github.com/gabrieljablonski/FFmpeg.git"
+  REPOLOCS[1]="https://github.com/gabrieljablonski/mlt.git"
   REPOLOCS[2]="https://github.com/gabrieljablonski/melted.git"
-  REPOLOCS[3]="git://github.com/dyne/frei0r.git"
-  REPOLOCS[4]="git://github.com/mirror/x264.git"
-  REPOLOCS[5]="https://chromium.googlesource.com/webm/libvpx.git"
+  REPOLOCS[3]="https://github.com/gabrieljablonski/frei0r.git"
+  REPOLOCS[4]="https://github.com/gabrieljablonski/x264.git"
+  REPOLOCS[5]="https://github.com/gabrieljablonski/libvpx.git"
   REPOLOCS[6]="git://github.com/mltframework/rugen.git"
   REPOLOCS[7]="git://github.com/mltframework/swfdec.git"
   REPOLOCS[8]="https://ftp.osuosl.org/pub/blfs/conglomeration/lame/lame-3.99.5.tar.gz"
@@ -347,18 +347,18 @@ function set_globals {
   # if test 0 = "$MELTED_HEAD" -a "$MELTED_REVISION" ; then
   #   REVISIONS[2]="$MELTED_REVISION"
   # fi
-  REVISIONS[3]=""
-  if test 0 = "$FREI0R_HEAD" -a "$FREI0R_REVISION" ; then
-    REVISIONS[3]="$FREI0R_REVISION"
-  fi
-  REVISIONS[4]=""
-  if test 0 = "$X264_HEAD" -a "$X264_REVISION" ; then
-    REVISIONS[4]="$X264_REVISION"
-  fi
-  REVISIONS[5]=""
-  if test 0 = "$LIBVPX_HEAD" -a "$LIBVPX_REVISION" ; then
-    REVISIONS[5]="$LIBVPX_REVISION"
-  fi
+  REVISIONS[3]="playcast-latest"
+  # if test 0 = "$FREI0R_HEAD" -a "$FREI0R_REVISION" ; then
+  #   REVISIONS[3]="$FREI0R_REVISION"
+  # fi
+  REVISIONS[4]="playcast-latest"
+  # if test 0 = "$X264_HEAD" -a "$X264_REVISION" ; then
+  #   REVISIONS[4]="$X264_REVISION"
+  # fi
+  REVISIONS[5]="playcast-latest"
+  # if test 0 = "$LIBVPX_HEAD" -a "$LIBVPX_REVISION" ; then
+  #   REVISIONS[5]="$LIBVPX_REVISION"
+  # fi
   REVISIONS[6]=""
   if test 0 = "$RUGEN_HEAD" -a "$RUGEN_REVISION" ; then
     REVISIONS[6]="$RUGEN_REVISION"
@@ -416,10 +416,10 @@ function set_globals {
   CONFIG[0]="${CONFIG[0]} $FFMPEG_ADDITIONAL_OPTIONS"
   CFLAGS_[0]="-I$FINAL_INSTALL_DIR/include -I$HOME/ffmpeg_sources/BMD_SDK/include -std=gnu++11 -std=gnu99 $CFLAGS"
   LDFLAGS_[0]="-L$FINAL_INSTALL_DIR/lib $LDFLAGS"
-
+  # export PKG_CONFIG_PATH=/opt/intel/mediasdk/lib/pkgconfig/
   #####
   # mlt
-  CONFIG[1]="./configure --prefix=$FINAL_INSTALL_DIR --enable-gpl --enable-linsys --swig-languages=python"
+  CONFIG[1]="./configure --prefix=$FINAL_INSTALL_DIR --enable-gpl --enable-linsys --swig-languages=python --ndi-sdk-lib=/root/ndi3/lib/x86_64-linux-gnu --ndi-sdk-include=/root/ndi3/include"
   # Remember, if adding more of these, to update the post-configure check.
   [ "$TARGET_OS" = "Darwin" ] && CONFIG[1]="${CONFIG[1]} --disable-jackrack"
   [ "$QT_INCLUDE_DIR" ] && CONFIG[1]="${CONFIG[1]} --qt-includedir=$QT_INCLUDE_DIR"
@@ -1224,6 +1224,7 @@ function main {
   cp /root/melted/preview/preview-feed /root/melted/$date/bin/
   cp /root/melted/preview/start-video-preview.sh /root/melted/$date/
   cp /root/melted/start-melted-server /root/melted/$date/
+  cp /root/melted/stop-melted-server /root/melted/$date/
   cp /root/melted/source-me /root/melted/$date/
   # All is well, that ends well
   exit 0
