@@ -935,7 +935,12 @@ int mlt_playlist_move( mlt_playlist self, int src, int dest )
 		else if ( dest < current && current < src )
 			current ++;
 		else if ( current == dest )
-			current = src;
+		{
+			if (src < current)
+				current --;
+			else if (src > current)
+				current ++;
+		}
 
 		src_entry = self->list[ src ];
 		if ( src > dest )
