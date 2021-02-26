@@ -207,6 +207,7 @@ public:
 		m_frames = mlt_deque_init();
 		m_frames_interim = mlt_deque_init();
 		m_buffer = NULL;
+		m_decklinkVideoConversion = NULL;
 
 		// operation locks
 		m_op_id = OP_NONE;
@@ -229,6 +230,7 @@ public:
 		SAFE_RELEASE( m_deckLinkKeyer );
 		SAFE_RELEASE( m_deckLinkOutput );
 		SAFE_RELEASE( m_deckLink );
+		SAFE_RELEASE( m_decklinkVideoConversion );
 
 		mlt_deque_close( m_aqueue );
 		mlt_deque_close( m_frames );
