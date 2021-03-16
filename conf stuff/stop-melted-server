@@ -1,0 +1,17 @@
+#!/bin/bash
+instance=$1
+
+KILL=kill
+PID=(`pgrep -f "melted.*525$1"`)
+if [ -z "$instance" ]; then
+  KILL=killall
+  PID=melted
+fi
+
+$KILL -INT $PID 2> /dev/null
+if [ $? -eq 0 ]; then
+  printf "Stopping melted ... "
+  sleep 3
+  $KILL -KILL $PID 2> /dev/null
+  echo "[Done]"
+fi

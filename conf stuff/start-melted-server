@@ -1,0 +1,31 @@
+#!/bin/sh
+
+## Figure out the install path regardless how invoked
+prefix=/viacast/playcast
+printf "Install prefix is \"%s\"\n" "$prefix"
+
+one=$1
+if [ ! -z "$one" ]; then
+  instance=".${one}"
+  shift
+fi
+
+# Setup the environment
+export PATH="$prefix/bin:$PATH"
+export LD_LIBRARY_PATH="$prefix/lib:$LD_LIBRARY_PATH"
+export MLT_REPOSITORY="$prefix/lib/mlt"
+export MLT_DATA="$prefix/share/mlt"
+export FREI0R_PATH="$prefix/lib/frei0r-1"
+export MLT_BACKGROUND_COLOR="black"
+# Get additional config options (like MLT_PROFILE)
+[ -e "$prefix/etc/start-melted.conf" ] && . "$prefix/etc/start-melted.conf"
+
+#. "$prefix/stop-melted-server"
+[ -e "$prefix/etc/melted.conf" ] && config="-c $prefix/etc/melted.conf${instance}"
+if [ ! -z "$one" ]; then
+  echo Starting melted $config -port "525${one}" $@
+  $prefix/bin/melted $config -port "525${one}" $@
+else
+  echo Starting melted $config $@
+  $prefix/bin/melted $config $@
+fi

@@ -1,0 +1,11 @@
+set root=/
+
+UADD decklink:0
+UADD decklink:1
+USET U1 consumer.mlt_profile="atsc_1080i_5994"
+USET U1 consumer.real_time=0
+USET U1 consumer.buffer=5
+USET U1 consumer.preroll=2
+USET U1 consumer.preview_file="melted_preview.1"
+USET U1 consumer.channels=16
+USET U1 producer.audio_index=all

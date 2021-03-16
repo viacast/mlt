@@ -1,8 +1,10 @@
 #!/bin/bash
 
 date=$(date +'%Y%m%d')
-source_dir=/root/melted/$date
-target_dir=/root/melted/melted-playcast-$date
+
+base_dir=/root/melted
+source_dir=$base_dir/$date
+target_dir=$base_dir/melted-playcast-$date
 
 rm -rf $target_dir
 mkdir $target_dir
@@ -34,4 +36,6 @@ cp -R $source_dir/share/mlt $target_dir/share/
 strip -s $target_dir/lib/*.so*
 strip -s $target_dir/lib/**/*.so*
 
-tar -czvf $target_dir.tar.xz $target_dir/
+cp $source_dir/playcast.sh $target_dir/sbin/
+mkdir $target_dir/backup
+# tar -czvf "./melted-playcast-${date}.tar.xz" $target_dir
