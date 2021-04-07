@@ -504,9 +504,9 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 	if ( original == total - 2 )
 		mlt_events_fire( properties, "playlist-next", i, NULL );
 
-	static double last_speed = 0;
-	int pause_clip = !strcmp(eof, "pause-clip") && original == total - 1 && last_speed;
-	last_speed = mlt_producer_get_speed(self);
+	int was_playing = mlt_properties_get_int(properties, "was-playing");
+	int pause_clip = !strcmp(eof, "pause-clip") && original == total - 1 && was_playing;
+	mlt_properties_set_int(properties, "was-playing", (int)(mlt_producer_get_speed(self) != 0));
 	// Ideally this should be set as late as possible,
 	// since if we seek to another clip, this isn't reset.
 	// This could be solved by using another prop
