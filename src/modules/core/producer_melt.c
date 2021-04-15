@@ -522,6 +522,7 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 		// mlt_properties_set( props, "title", strchr( title, '/' ) ? strrchr( title, '/' ) + 1 : title );
 		mlt_properties_set( props, "title", title );
 
+	mlt_properties_set(properties, "audio_index", "all");
 	// If the last producer has a consumer property connect it tractor
 	if ( producer )
 	{
