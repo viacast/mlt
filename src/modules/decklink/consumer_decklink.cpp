@@ -155,7 +155,7 @@ private:
 	IDeckLinkVideoConversion*   m_decklinkVideoConversion;
 	uint16_t 										m_cdp_sequence_num;
 	unsigned int                m_last_scte_sent_event_id;
-	double										  m_last_scte_sent_time;
+	int										      m_last_scte_sent_time;
 
 	IDeckLinkDisplayMode* getDisplayMode()
 	{
@@ -818,19 +818,26 @@ done:
 			if (!m_supports_vanc || !scte_104.splice_event_id)
 					return S_OK;
 
-			if (!scte_104.send_interval && scte_104.splice_event_id == m_last_scte_sent_event_id) {
-					return S_OK;
+			// if (!scte_104.send_interval && scte_104.splice_event_id == m_last_scte_sent_event_id) {
+			// 		return S_OK;
+			// }
+			// if (scte_104.send_interval) {
+			// 	double now = currentTime() * 1000;
+			// 	if (now < m_last_scte_sent_time + scte_104.send_interval) {
+			// 			return S_OK;
+			// 	}
+			// 	m_last_scte_sent_time = now;
+			// }
+
+			int now = currentTime() * 1000;
+			if (now < m_last_scte_sent_time + scte_104.send_interval) {
+				return S_OK;
 			}
-			if (scte_104.send_interval) {
-				double now = currentTime();
-				if (now < m_last_scte_sent_time + scte_104.send_interval) {
-						return S_OK;
-				}
-				m_last_scte_sent_time = now;
-			}
+			m_last_scte_sent_time = now;
 			m_last_scte_sent_event_id = scte_104.splice_event_id;
 			
 			// mlt_log_warning(NULL, "sending scte104\n");
+			// fprintf(stderr, "sending scte104\n");
 
 			IDeckLinkVideoFrameAncillary *vanc;
 			result = decklink_frame->GetAncillaryData(&vanc);
