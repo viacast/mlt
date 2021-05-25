@@ -837,7 +837,7 @@ done:
 			// m_last_scte_sent_time = now;
 			m_last_scte_sent_event_id = scte_104.splice_event_id;
 			
-			mlt_log_warning(getConsumer(), "sending scte104: id=%d:type=%d\n", scte_104.unique_program_id, scte_104.splice_insert_type);
+			mlt_log_warning(getConsumer(), "sending scte104: id=%d:type=%u\n", scte_104.unique_program_id, scte_104.splice_insert_type);
 
 			IDeckLinkVideoFrameAncillary *vanc;
 			result = decklink_frame->GetAncillaryData(&vanc);
