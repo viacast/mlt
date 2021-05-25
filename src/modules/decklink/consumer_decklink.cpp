@@ -811,8 +811,9 @@ done:
 			uint16_t wordCount;
 
 			char *scte = mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.scte-104");
-			if (!scte || (scte && !strlen(scte)))
+			if (!scte || !strlen(scte)) {
 					return S_OK;
+			}
 
 			struct SCTE104 scte_104 = parse_scte_104(scte);
 			if (!m_supports_vanc || !scte_104.splice_event_id)
@@ -829,15 +830,14 @@ done:
 			// 	m_last_scte_sent_time = now;
 			// }
 
-			int now = currentTime() * 1000;
-			if (now < m_last_scte_sent_time + scte_104.send_interval) {
-				return S_OK;
-			}
-			m_last_scte_sent_time = now;
+			// int now = currentTime() * 1000;
+			// if (now < m_last_scte_sent_time + scte_104.send_interval) {
+			// 	return S_OK;
+			// }
+			// m_last_scte_sent_time = now;
 			m_last_scte_sent_event_id = scte_104.splice_event_id;
 			
-			// mlt_log_warning(NULL, "sending scte104\n");
-			// fprintf(stderr, "sending scte104\n");
+			mlt_log_warning(getConsumer(), "sending scte104: id=%d:type=%d\n", scte_104.unique_program_id, scte_104.splice_insert_type);
 
 			IDeckLinkVideoFrameAncillary *vanc;
 			result = decklink_frame->GetAncillaryData(&vanc);

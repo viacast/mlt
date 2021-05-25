@@ -611,7 +611,7 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	if ( self != NULL && !mlt_producer_is_cut( self ) )
 	{
 		// Get the properties of this producer
-		mlt_properties properties = MLT_PRODUCER_PROPERTIES( self );
+		mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
 
 		// Determine eof handling
 		char *eof = mlt_properties_get( MLT_PRODUCER_PROPERTIES( self ), "eof" );
@@ -620,7 +620,7 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 		double speed = mlt_producer_get_speed( self );
 
 		// We need to use the clone if it's specified
-		mlt_producer clone = mlt_properties_get_data( properties, "use_clone", NULL );
+		mlt_producer clone = mlt_properties_get_data( producer_properties, "use_clone", NULL );
 
 		// If no clone is specified, use self
 		clone = clone == NULL ? self : clone;
@@ -647,21 +647,35 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 			result = self->get_frame( clone, frame, index );
 		}
 
+		char *scte_start = mlt_properties_get( producer_properties, "meta.scte-104-start" );
+		int has_scte_start = scte_start && strlen(scte_start);
+		char *scte_end = mlt_properties_get( producer_properties, "meta.scte-104-end" );
+		int has_scte_end = scte_end && strlen(scte_end);
+
 		// Copy the fps and speed of the producer onto the frame
-		properties = MLT_FRAME_PROPERTIES( *frame );
+		mlt_properties frame_properties = MLT_FRAME_PROPERTIES( *frame );
 
 		// TODO: check if needed since meta props are copied below
-		char *scte = mlt_properties_get( MLT_PRODUCER_PROPERTIES( self ), "meta.scte-104" );
-		if (scte && strlen(scte)) {
-			mlt_properties_set(properties, "meta.scte-104", scte);
-			// mlt_log_warning(NULL, "producer:scte-104:%s\n", scte);
+		if (has_scte_start || has_scte_end) {
+			int last_position = mlt_properties_get_int(producer_properties, "meta.last-position");
+			int _position = mlt_properties_get_int(frame_properties, "_position");
+			int in_point = mlt_properties_get_int(producer_properties, "in");
+			int out_point = mlt_properties_get_int(producer_properties, "out");
+			// mlt_log_warning(NULL, "last_position=%d:_position=%d:in_point=%d:out_point=%d\n", last_position,_position,in_point,out_point);
+			if (has_scte_start && last_position == _position - 1 && last_position == in_point + 1) {
+				mlt_properties_set(frame_properties, "meta.scte-104", scte_start);
+			}
+			if (has_scte_end && last_position == _position - 1 && _position == out_point) {
+				mlt_properties_set(frame_properties, "meta.scte-104", scte_end);
+			}
+			mlt_properties_set_int(producer_properties, "meta.last-position", _position);
 		}
 
-		mlt_properties_set_double( properties, "_speed", speed );
-		mlt_properties_set_int( properties, "test_audio", mlt_frame_is_test_audio( *frame ) );
-		mlt_properties_set_int( properties, "test_image", mlt_frame_is_test_card( *frame ) );
-		if ( mlt_properties_get_data( properties, "_producer", NULL ) == NULL )
-			mlt_properties_set_data( properties, "_producer", service, 0, NULL, NULL );
+		mlt_properties_set_double( frame_properties, "_speed", speed );
+		mlt_properties_set_int( frame_properties, "test_audio", mlt_frame_is_test_audio( *frame ) );
+		mlt_properties_set_int( frame_properties, "test_image", mlt_frame_is_test_card( *frame ) );
+		if ( mlt_properties_get_data( frame_properties, "_producer", NULL ) == NULL )
+			mlt_properties_set_data( frame_properties, "_producer", service, 0, NULL, NULL );
 	}
 	else if ( self != NULL )
 	{
