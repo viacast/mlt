@@ -647,30 +647,7 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 			result = self->get_frame( clone, frame, index );
 		}
 
-		char *scte_start = mlt_properties_get( producer_properties, "meta.scte-104-start" );
-		int has_scte_start = scte_start && strlen(scte_start);
-		char *scte_end = mlt_properties_get( producer_properties, "meta.scte-104-end" );
-		int has_scte_end = scte_end && strlen(scte_end);
-
-		// Copy the fps and speed of the producer onto the frame
 		mlt_properties frame_properties = MLT_FRAME_PROPERTIES( *frame );
-
-		// TODO: check if needed since meta props are copied below
-		if (has_scte_start || has_scte_end) {
-			int last_position = mlt_properties_get_int(producer_properties, "meta.last-position");
-			int _position = mlt_properties_get_int(frame_properties, "_position");
-			int in_point = mlt_properties_get_int(producer_properties, "in");
-			int out_point = mlt_properties_get_int(producer_properties, "out");
-			// mlt_log_warning(NULL, "last_position=%d:_position=%d:in_point=%d:out_point=%d\n", last_position,_position,in_point,out_point);
-			if (has_scte_start && last_position == _position - 1 && last_position == in_point + 1) {
-				mlt_properties_set(frame_properties, "meta.scte-104", scte_start);
-			}
-			if (has_scte_end && last_position == _position - 1 && _position == out_point) {
-				mlt_properties_set(frame_properties, "meta.scte-104", scte_end);
-			}
-			mlt_properties_set_int(producer_properties, "meta.last-position", _position);
-		}
-
 		mlt_properties_set_double( frame_properties, "_speed", speed );
 		mlt_properties_set_int( frame_properties, "test_audio", mlt_frame_is_test_audio( *frame ) );
 		mlt_properties_set_int( frame_properties, "test_image", mlt_frame_is_test_card( *frame ) );
@@ -752,6 +729,79 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 				mlt_properties_set( f_props, name + 4, mlt_properties_get_value( p_props, i ) );
 		}
 		mlt_properties_unlock( p_props );
+	}
+
+	mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
+	mlt_properties frame_properties = MLT_FRAME_PROPERTIES( *frame );
+	char *playcast_id = mlt_properties_get(frame_properties, "meta.playcast.id");
+	char *scte_blocks_prop = mlt_properties_get(frame_properties, "meta.playcast.scte-blocks");
+
+	if (scte_blocks_prop && playcast_id) {
+		char scte_blocks[10240];
+		strncpy(scte_blocks, scte_blocks_prop, 10239);
+
+		char *save_scte_blocks = scte_blocks;
+		char *event_id;
+		char *block_id;
+		int block_event_count;
+		char *block_scte_start;
+		char *block_scte_end;
+
+		char actual_block[64];
+		actual_block[0] = '\0';
+		int actual_block_event_count;
+		int event_index;
+
+		const char delim[2] = ":";
+		block_id = strtok_r(scte_blocks, delim, &save_scte_blocks);
+
+		while (block_id) {
+			block_event_count = 0;
+			char block_events_prop_name[10240];
+			snprintf(block_events_prop_name, 10239, "meta.playcast.scte-blocks.%s.events", block_id);
+			char *block_events_prop = mlt_properties_get(frame_properties, block_events_prop_name);
+			if (block_events_prop && strlen(block_events_prop)) {
+				char block_events[10240];
+				strncpy(block_events, block_events_prop, 10239);
+				char *save_block_events = block_events;
+				event_id = strtok_r(block_events, delim, &save_block_events);
+				while (event_id && strlen(event_id)) {
+					if (!strcmp(event_id, playcast_id)) {
+						strcpy(actual_block, block_id);
+						event_index = block_event_count;
+					}
+					++block_event_count;
+					event_id = strtok_r(NULL, delim, &save_block_events);
+				}
+				if (actual_block) {
+					actual_block_event_count = block_event_count;
+					break;
+				}
+			}
+			block_id = strtok_r(NULL, delim, &save_scte_blocks);
+		}
+		if (actual_block && strlen(actual_block)) {
+			mlt_log_warning(NULL, "actual_block=%s:actual_block_event_count=%d:event_index=%d\n", actual_block, actual_block_event_count, event_index);
+			// char *scte_start = mlt_properties_get( producer_properties, "meta.playcast.scte-start" );
+			// int has_scte_start = scte_start && strlen(scte_start);
+			// char *scte_end = mlt_properties_get( producer_properties, "meta.playcast.scte-end" );
+			// int has_scte_end = scte_end && strlen(scte_end);
+			// // TODO: check if needed since meta props are copied below
+			// if (has_scte_start || has_scte_end) {
+			// 	int last_position = mlt_properties_get_int(producer_properties, "meta.last-position");
+			// 	int _position = mlt_properties_get_int(frame_properties, "_position");
+			// 	int in_point = mlt_properties_get_int(producer_properties, "in");
+			// 	int out_point = mlt_properties_get_int(producer_properties, "out");
+			// 	// mlt_log_warning(NULL, "last_position=%d:_position=%d:in_point=%d:out_point=%d\n", last_position,_position,in_point,out_point);
+			// 	if (has_scte_start && last_position == _position - 1 && last_position == in_point + 1) {
+			// 		mlt_properties_set(frame_properties, "meta.scte-104", scte_start);
+			// 	}
+			// 	if (has_scte_end && last_position == _position - 1 && _position == out_point) {
+			// 		mlt_properties_set(frame_properties, "meta.scte-104", scte_end);
+			// 	}
+			// 	mlt_properties_set_int(producer_properties, "meta.last-position", _position);
+			// }
+		}
 	}
 
 	return result;

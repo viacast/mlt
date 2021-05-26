@@ -167,8 +167,7 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 			!strcmp( argv[ i ], "-mix" ) ||
 			!strcmp( argv[ i ], "-filter" ) ||
 			!strcmp( argv[ i ], "-transition" ) ||
-			!strcmp( argv[ i ], "-scte-104-start" ) ||
-			!strcmp( argv[ i ], "-scte-104-end" ) ||
+			!strcmp( argv[ i ], "-playcast-id" ) ||
 			!strcmp( argv[ i ], "-in" ) ||
 			!strcmp( argv[ i ], "-out" ) ||
 			!strcmp( argv[ i ], "-blank" ) ) )
@@ -393,20 +392,12 @@ mlt_producer producer_melt_init( mlt_profile profile, mlt_service_type type, con
 				// support for legacy where plain int is an out point instead of length
 				mlt_playlist_blank( playlist, atof( argv[ ++ i ] ) );
 		}
-		else if ( !strcmp( argv[ i ], "-scte-104-start" ) )
+		else if ( !strcmp( argv[ i ], "-playcast-id" ) )
 		{
-			char *scte_104 = argv[ ++i ];
+			char *playcast_id = argv[ ++i ];
 			if ( producer != NULL ) 
 			{
-				mlt_properties_set(MLT_PRODUCER_PROPERTIES(producer), "meta.scte-104-start", scte_104);
-			}
-		}
-		else if ( !strcmp( argv[ i ], "-scte-104-end" ) )
-		{
-			char *scte_104 = argv[ ++i ];
-			if ( producer != NULL ) 
-			{
-				mlt_properties_set(MLT_PRODUCER_PROPERTIES(producer), "meta.scte-104-end", scte_104);
+				mlt_properties_set(MLT_PRODUCER_PROPERTIES(producer), "meta.playcast.id", playcast_id);
 			}
 		}
 		else if ( !strcmp( argv[ i ], "-in-out" ) )
