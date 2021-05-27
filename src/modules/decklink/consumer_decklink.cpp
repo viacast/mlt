@@ -91,9 +91,9 @@ struct SCTE104
 {
 	unsigned int splice_insert_type;
 	unsigned int splice_event_id;
-	unsigned short unique_program_id;
-	unsigned short pre_roll_time;
-	unsigned short brk_duration;
+	unsigned int unique_program_id;
+	unsigned int pre_roll_time;
+	unsigned int brk_duration;
 	unsigned char avail_num;
 	unsigned char avails_expected;
 	unsigned char auto_return_flag;
@@ -837,7 +837,7 @@ done:
 			// m_last_scte_sent_time = now;
 			m_last_scte_sent_event_id = scte_104.splice_event_id;
 			
-			mlt_log_warning(getConsumer(), "sending scte104: id=%d:type=%u\n", scte_104.unique_program_id, scte_104.splice_insert_type);
+			mlt_log_warning(getConsumer(), "sending scte104: pid=%d:eid=%d:type=%d:duration=%d:preroll=%d\n", scte_104.unique_program_id, scte_104.splice_event_id, scte_104.splice_insert_type, scte_104.brk_duration, scte_104.pre_roll_time);
 
 			IDeckLinkVideoFrameAncillary *vanc;
 			result = decklink_frame->GetAncillaryData(&vanc);
