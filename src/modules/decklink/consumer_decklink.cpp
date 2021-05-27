@@ -762,6 +762,13 @@ done:
 
 		scte_104.splice_event_id = ++splice_event_id;
 		scte_104.unique_program_id = unique_program_id;
+		scte_104.splice_event_id = 0;
+		scte_104.pre_roll_time = 0;
+		scte_104.brk_duration = 0;
+		scte_104.avail_num = 0;
+		scte_104.avails_expected = 0;
+		scte_104.auto_return_flag = 0;
+		scte_104.send_interval = 0;
 
 		char scte_cpy[1024];
 		strcpy(scte_cpy, scte_104_str);
