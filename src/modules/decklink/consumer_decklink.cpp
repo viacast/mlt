@@ -810,7 +810,7 @@ done:
 			uint16_t *words;
 			uint16_t wordCount;
 
-			char *scte = mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.scte-104");
+			char *scte = mlt_properties_get(MLT_FRAME_PROPERTIES(frame), "meta.playcast.scte-info");
 			if (!scte || !strlen(scte)) {
 					return S_OK;
 			}
