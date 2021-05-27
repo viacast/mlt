@@ -731,33 +731,32 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 		mlt_properties_unlock( p_props );
 	}
 
-	mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
 	mlt_properties frame_properties = MLT_FRAME_PROPERTIES( *frame );
-	
-	int last_position = mlt_properties_get_int(producer_properties, "meta.last-position");
-	int _position = mlt_properties_get_int(frame_properties, "_position");
-	int in_point = mlt_properties_get_int(producer_properties, "in");
-	int out_point = mlt_properties_get_int(producer_properties, "out");
-	mlt_properties_set_int(producer_properties, "meta.last-position", _position);
+	mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
 
-	// mlt_log_warning(NULL, "last_position=%d:_position=%d:in_point=%d:out_point=%d\n", last_position, _position, in_point, out_point);
-
-	int is_first_frame = 0;
-	int is_last_frame = 0;
-
-	if (last_position == _position - 1) {
-		is_first_frame = last_position == in_point + 1;
-		is_last_frame = _position == out_point;
-	}
-
-	if (!is_first_frame && !is_last_frame) {
-		goto skip_scte;
-	}
+	// mlt_properties_dump(frame_properties, stderr);
 
 	char *playcast_id = mlt_properties_get(frame_properties, "meta.playcast.id");
 	char *scte_blocks_prop = mlt_properties_get(frame_properties, "meta.playcast.scte-blocks");
 
 	if (!scte_blocks_prop || !playcast_id) {
+		goto skip_scte;
+	}
+
+	int _speed = mlt_properties_get_int(frame_properties, "_speed");
+	int position = mlt_properties_get_int(frame_properties, "original_position");
+	int in_point = mlt_properties_get_int(frame_properties, "in");
+	int out_point = mlt_properties_get_int(frame_properties, "out");
+
+	int is_first_frame = 0;
+	int is_last_frame = 0;
+
+	if (_speed) {
+		is_first_frame = position == in_point + 1;
+		is_last_frame = position == out_point;
+	}
+
+	if (!is_first_frame && !is_last_frame) {
 		goto skip_scte;
 	}
 
@@ -776,20 +775,24 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	int actual_block_event_count;
 	int event_index;
 
+	// mlt_log_warning(NULL, "scte_blocks=%s\n", scte_blocks);
 	const char delim[2] = ":";
 	block_id = strtok_r(scte_blocks, delim, &save_scte_blocks);
 
 	while (block_id) {
+		// mlt_log_warning(NULL, "block_id=%s:playcast_id=%s\n", block_id, playcast_id);
 		block_event_count = 0;
 		char block_events_prop_name[10240];
 		snprintf(block_events_prop_name, 10239, "meta.playcast.scte-blocks.%s.events", block_id);
 		char *block_events_prop = mlt_properties_get(frame_properties, block_events_prop_name);
+		// mlt_log_warning(NULL, "block_events_prop=%s\n", block_events_prop);
 		if (block_events_prop && strlen(block_events_prop)) {
 			char block_events[10240];
 			strncpy(block_events, block_events_prop, 10239);
 			char *save_block_events = block_events;
 			event_id = strtok_r(block_events, delim, &save_block_events);
 			while (event_id && strlen(event_id)) {
+				// mlt_log_warning(NULL, "event_id=%s\n", event_id);
 				if (!strcmp(event_id, playcast_id)) {
 					strcpy(actual_block, block_id);
 					event_index = block_event_count;
@@ -797,7 +800,7 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 				++block_event_count;
 				event_id = strtok_r(NULL, delim, &save_block_events);
 			}
-			if (actual_block) {
+			if (actual_block && strlen(actual_block)) {
 				actual_block_event_count = block_event_count;
 				break;
 			}
@@ -818,10 +821,10 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	char *scte_end = mlt_properties_get(producer_properties, block_info_prop_name);
 	int has_scte_end = scte_end && strlen(scte_end);
 
-	if (is_first_frame && scte_start && strlen(scte_start)) {
+	if (!event_index && is_first_frame && scte_start && strlen(scte_start)) {
 		mlt_properties_set(frame_properties, "meta.playcast.scte-info", scte_start);
 	}
-	if (is_last_frame && scte_end && strlen(scte_end)) {
+	if (event_index == actual_block_event_count - 1 && is_last_frame && scte_end && strlen(scte_end)) {
 		mlt_properties_set(frame_properties, "meta.playcast.scte-info", scte_end);
 	}
 
