@@ -313,8 +313,7 @@ int mlt_producer_seek( mlt_producer self, mlt_position position )
 	// Determine eof handling
 	mlt_properties properties = MLT_PRODUCER_PROPERTIES( self );
 	char *eof = mlt_properties_get( properties, "eof" );
-	// int use_points = 1 - mlt_properties_get_int( properties, "ignore_points" );
-	int use_points = 0;
+	int use_points = 1 - mlt_properties_get_int( properties, "ignore_points" );
 
 	// Recursive behaviour for cuts - repositions parent and then repositions cut
 	// hence no return on this condition
