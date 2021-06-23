@@ -26,6 +26,8 @@
 #include "mlt_parser.h"
 #include "mlt_profile.h"
 #include "mlt_log.h"
+#include "mlt_playlist.h"
+#include "mlt_multitrack.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -587,6 +589,18 @@ void mlt_producer_prepare_next( mlt_producer self )
 		mlt_producer_seek( self, mlt_producer_position( self ) + mlt_producer_get_speed( self ) );
 }
 
+struct playlist_entry_s
+{
+	mlt_producer producer;
+	mlt_position frame_in;
+	mlt_position frame_out;
+	mlt_position frame_count;
+	int repeat;
+	mlt_position producer_length;
+	mlt_event event;
+	int preservation_hack;
+};
+
 /** Get a frame.
  *
  * This is the implementation of the \p get_frame virtual function.
@@ -734,12 +748,71 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	mlt_properties frame_properties = MLT_FRAME_PROPERTIES( *frame );
 	mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
 
+	// fprintf(stderr, "\n");
 	// mlt_properties_dump(frame_properties, stderr);
+	// fprintf(stderr, "\n");
+	// mlt_properties_dump(producer_properties, stderr);
 
 	char *playcast_id = mlt_properties_get(frame_properties, "meta.playcast.id");
-	char *scte_blocks_prop = mlt_properties_get(frame_properties, "meta.playcast.scte-blocks");
 
-	if (!scte_blocks_prop || !playcast_id) {
+	if (!playcast_id) {
+		goto skip_playcast;
+	}
+
+	char watermark_prop_name[1024];
+	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark", playcast_id);
+
+	char *watermark_prop = mlt_properties_get(frame_properties, watermark_prop_name);
+
+	if (!frame || !watermark_prop || !strlen(watermark_prop)) {
+		goto skip_watermark;
+	}
+
+	mlt_playlist playlist = mlt_properties_get_data(producer_properties, "playlist", NULL);
+
+	if (!playlist) {
+		goto skip_watermark;
+	}
+
+	mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[0]->producer)), "multitrack", NULL);
+
+	if (!multitrack) {
+		goto skip_watermark;
+	}
+
+	mlt_track track = multitrack->list[0];
+
+	mlt_playlist playlist2 = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(track->producer), "playlist", NULL);
+
+	if (!playlist2) {
+		goto skip_watermark;
+	}
+
+	for (int i = 0; i < playlist2->count; ++i) {
+		mlt_producer avproducer = mlt_producer_cut_parent(playlist2->list[i]->producer);
+		mlt_properties avproperties = MLT_PRODUCER_PROPERTIES(avproducer);
+		if (avproducer) {
+			char *avproducer_playcast_id = mlt_properties_get(avproperties, "meta.playcast.id");
+			if (!avproducer_playcast_id || strcmp(avproducer_playcast_id, playcast_id)) {
+				continue;
+			}
+			// mlt_properties_dump(MLT_PRODUCER_PROPERTIES(avproducer), stderr);
+			mlt_filter watermark = mlt_properties_get_data( avproperties, "watermark", NULL );
+			if( watermark == NULL ) {
+				mlt_profile profile = mlt_service_profile( MLT_PRODUCER_SERVICE( avproducer ) );
+				watermark = mlt_factory_filter( profile, "watermark", NULL );
+				mlt_properties_set_data( avproperties, "watermark", watermark, 0, (mlt_destructor)mlt_filter_close, NULL );
+				mlt_producer_attach( avproducer, watermark );
+			}
+			mlt_properties wm_properties = MLT_FILTER_PROPERTIES( watermark );
+			mlt_properties_set( wm_properties, "resource", watermark_prop );
+			mlt_properties_set( wm_properties, "composite.geometry", "65%/85%:600x100" );
+		}
+	}
+
+skip_watermark:;
+	char *scte_blocks_prop = mlt_properties_get(frame_properties, "meta.playcast.scte-blocks");
+	if (!scte_blocks_prop) {
 		goto skip_scte;
 	}
 
@@ -829,6 +902,7 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	}
 
 skip_scte:
+skip_playcast:
 	return result;
 }
 
