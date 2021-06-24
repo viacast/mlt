@@ -753,19 +753,26 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	// fprintf(stderr, "\n");
 	// mlt_properties_dump(producer_properties, stderr);
 
-	char *playcast_id = mlt_properties_get(frame_properties, "meta.playcast.id");
-
-	if (!playcast_id) {
+	if (!frame) {
 		goto skip_playcast;
 	}
 
+	char *playcast_id = mlt_properties_get(frame_properties, "meta.playcast.id");
+
+	int watermarkIsGlobal = 0;
 	char watermark_prop_name[1024];
 	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark", playcast_id);
-
 	char *watermark_prop = mlt_properties_get(frame_properties, watermark_prop_name);
+	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.geometry", playcast_id);
+	char *watermark_geometry = mlt_properties_get(frame_properties, watermark_prop_name);
 
-	if (!frame || !watermark_prop || !strlen(watermark_prop)) {
-		goto skip_watermark;
+	if (!watermark_prop || !strlen(watermark_prop)) {
+		watermark_prop = mlt_properties_get(frame_properties, "meta.playcast.watermark");
+		watermark_geometry = mlt_properties_get(frame_properties, "meta.playcast.geometry");
+		if (!watermark_prop || !strlen(watermark_prop)) {
+			goto skip_watermark;
+		}
+		watermarkIsGlobal = 1;
 	}
 
 	mlt_playlist playlist = mlt_properties_get_data(producer_properties, "playlist", NULL);
@@ -774,43 +781,58 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 		goto skip_watermark;
 	}
 
-	mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[0]->producer)), "multitrack", NULL);
-
-	if (!multitrack) {
-		goto skip_watermark;
-	}
-
-	mlt_track track = multitrack->list[0];
-
-	mlt_playlist playlist2 = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(track->producer), "playlist", NULL);
-
-	if (!playlist2) {
-		goto skip_watermark;
-	}
-
-	for (int i = 0; i < playlist2->count; ++i) {
-		mlt_producer avproducer = mlt_producer_cut_parent(playlist2->list[i]->producer);
-		mlt_properties avproperties = MLT_PRODUCER_PROPERTIES(avproducer);
-		if (avproducer) {
-			char *avproducer_playcast_id = mlt_properties_get(avproperties, "meta.playcast.id");
-			if (!avproducer_playcast_id || strcmp(avproducer_playcast_id, playcast_id)) {
-				continue;
+	for (int i = 0; i < playlist->count; ++i) {
+		mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[i]->producer)), "multitrack", NULL);
+		if (!multitrack) {
+			goto skip_watermark;
+		}
+		mlt_track track = multitrack->list[0];
+		mlt_playlist playlist2 = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(track->producer), "playlist", NULL);
+		if (!playlist2) {
+			goto skip_watermark;
+		}
+		int found = 0;
+		for (int j = 0; j < playlist2->count; ++j) {
+			mlt_producer avproducer = mlt_producer_cut_parent(playlist2->list[j]->producer);
+			mlt_properties avproperties = MLT_PRODUCER_PROPERTIES(avproducer);
+			if (avproducer) {
+				if (!watermarkIsGlobal) {
+					char *avproducer_playcast_id = mlt_properties_get(avproperties, "meta.playcast.id");
+					if (!avproducer_playcast_id || strcmp(avproducer_playcast_id, playcast_id)) {
+						continue;
+					}
+				}
+				mlt_filter watermark = mlt_properties_get_data(avproperties, "watermark", NULL);
+				if(!watermark) {
+					mlt_profile profile = mlt_service_profile(MLT_PRODUCER_SERVICE(avproducer));
+					watermark = mlt_factory_filter(profile, "watermark", NULL);
+					mlt_properties_set_data(avproperties, "watermark", watermark, 0, (mlt_destructor)mlt_filter_close, NULL);
+					mlt_producer_attach(avproducer, watermark);
+				}
+				mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
+				mlt_properties_set(wm_properties, "resource", watermark_prop);
+				if (watermark_geometry && strlen(watermark_geometry)) {
+					mlt_properties_set(wm_properties, "composite.geometry", watermark_geometry);
+				} else {
+					mlt_properties_set(wm_properties, "composite.geometry", "0/0:100%x100%");
+				}
+				if (!watermarkIsGlobal) {
+					found = 1;
+					break;
+				}
 			}
-			// mlt_properties_dump(MLT_PRODUCER_PROPERTIES(avproducer), stderr);
-			mlt_filter watermark = mlt_properties_get_data( avproperties, "watermark", NULL );
-			if( watermark == NULL ) {
-				mlt_profile profile = mlt_service_profile( MLT_PRODUCER_SERVICE( avproducer ) );
-				watermark = mlt_factory_filter( profile, "watermark", NULL );
-				mlt_properties_set_data( avproperties, "watermark", watermark, 0, (mlt_destructor)mlt_filter_close, NULL );
-				mlt_producer_attach( avproducer, watermark );
-			}
-			mlt_properties wm_properties = MLT_FILTER_PROPERTIES( watermark );
-			mlt_properties_set( wm_properties, "resource", watermark_prop );
-			mlt_properties_set( wm_properties, "composite.geometry", "65%/85%:600x100" );
+		}
+		if (!watermarkIsGlobal && found) {
+			break;
 		}
 	}
 
-skip_watermark:;
+
+skip_watermark:
+	if (!playcast_id) {
+		goto skip_playcast;
+	}
+
 	char *scte_blocks_prop = mlt_properties_get(frame_properties, "meta.playcast.scte-blocks");
 	if (!scte_blocks_prop) {
 		goto skip_scte;
