@@ -79,9 +79,9 @@ static int mlt_to_av_image_format( mlt_image_format format )
 	{
 	case mlt_image_none:
 		return AV_PIX_FMT_NONE;
-	case mlt_image_rgb24:
+	case mlt_image_rgb:
 		return AV_PIX_FMT_RGB24;
-	case mlt_image_rgb24a:
+	case mlt_image_rgba:
 		return AV_PIX_FMT_RGBA;
 	case mlt_image_yuv422:
 		return AV_PIX_FMT_YUYV422;
@@ -97,17 +97,17 @@ static mlt_image_format get_supported_image_format( mlt_image_format format )
 {
 	switch( format )
 	{
-	case mlt_image_rgb24a:
-		return mlt_image_rgb24a;
-	case mlt_image_rgb24:
-		return mlt_image_rgb24;
+	case mlt_image_rgba:
+		return mlt_image_rgba;
+	case mlt_image_rgb:
+		return mlt_image_rgb;
 	case mlt_image_yuv420p:
 		return mlt_image_yuv420p;
 	default:
 		mlt_log_error(NULL, "[filter_avfilter] Unknown image format requested: %d\n", format );
 	case mlt_image_none:
 	case mlt_image_yuv422:
-	case mlt_image_opengl:
+	case mlt_image_movit:
 	case mlt_image_glsl:
 	case mlt_image_glsl_texture:
 		return mlt_image_yuv422;

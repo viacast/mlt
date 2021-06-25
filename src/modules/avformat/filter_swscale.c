@@ -39,11 +39,11 @@ static inline int convert_mlt_to_av_cs( mlt_image_format format )
 
 	switch( format )
 	{
-		case mlt_image_rgb24:
+		case mlt_image_rgb:
 			value = AV_PIX_FMT_RGB24;
 			break;
-		case mlt_image_rgb24a:
-		case mlt_image_opengl:
+		case mlt_image_rgba:
+		case mlt_image_movit:
 			value = AV_PIX_FMT_RGBA;
 			break;
 		case mlt_image_yuv422:
@@ -98,9 +98,9 @@ static int filter_scale( mlt_frame frame, uint8_t **image, mlt_image_format *for
 	switch ( *format )
 	{
 		case mlt_image_yuv422:
-		case mlt_image_rgb24:
-		case mlt_image_rgb24a:
-		case mlt_image_opengl:
+		case mlt_image_rgb:
+		case mlt_image_rgba:
+		case mlt_image_movit:
 			break;
 		default:
 			// XXX: we only know how to rescale packed formats

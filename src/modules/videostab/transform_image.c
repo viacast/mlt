@@ -599,7 +599,7 @@ int transform_configure(TransformData *self,int width,int height, mlt_image_form
      *  MAX_PLANES * sizeof(char) * 2 * td->vob->im_v_height * 2;
      */
 	// rgb24 = w*h*3 , yuv420p = w* h* 3/2
-    td->framesize_src = width*height*(pixelformat==mlt_image_rgb24 ? 3 : (3.0/2.0));
+    td->framesize_src = width*height*(pixelformat==mlt_image_rgb ? 3 : (3.0/2.0));
     td->src = malloc(td->framesize_src); /* FIXME */
     if (td->src == NULL) {
         mlt_log_error(NULL,"tc_malloc failed\n");
@@ -699,7 +699,7 @@ int transform_filter_video(TransformData *self,
         td->warned_transform_end = 1;
     }
 
-    if (pixelformat == mlt_image_rgb24 ) {
+    if (pixelformat == mlt_image_rgb ) {
         transformRGB(td);
     } else if (pixelformat == mlt_image_yuv420p) {
         transformYUV(td);

@@ -581,9 +581,9 @@ static enum AVPixelFormat pick_pix_fmt( mlt_image_format img_fmt )
 {
 	switch ( img_fmt )
 	{
-	case mlt_image_rgb24:
+	case mlt_image_rgb:
 		return AV_PIX_FMT_RGB24;
-	case mlt_image_rgb24a:
+	case mlt_image_rgba:
 		return AV_PIX_FMT_RGBA;
 	case mlt_image_yuv420p:
 		return AV_PIX_FMT_YUV420P;
@@ -1669,11 +1669,11 @@ static void *consumer_thread( void *arg )
 					 !strcmp( pix_fmt_name, "argb" ) ||
 					 !strcmp( pix_fmt_name, "bgra" ) ) {
 					mlt_properties_set( properties, "mlt_image_format", "rgb24a" );
-					img_fmt = mlt_image_rgb24a;
+					img_fmt = mlt_image_rgba;
 				} else if ( strstr( pix_fmt_name, "rgb" ) ||
 							strstr( pix_fmt_name, "bgr" ) ) {
 					mlt_properties_set( properties, "mlt_image_format", "rgb24" );
-					img_fmt = mlt_image_rgb24;
+					img_fmt = mlt_image_rgb;
 				}
 			}
 		}

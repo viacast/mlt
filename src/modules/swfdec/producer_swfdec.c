@@ -122,7 +122,7 @@ static int get_image( mlt_frame frame, uint8_t **buffer, mlt_image_format *forma
 	// Set width and height
 	*width = swfdec->width;
 	*height = swfdec->height;
-	*format = mlt_image_rgb24a;
+	*format = mlt_image_rgba;
 	int size = mlt_image_format_size( *format, *width, *height, NULL );
 
 	*buffer = mlt_pool_alloc( size );

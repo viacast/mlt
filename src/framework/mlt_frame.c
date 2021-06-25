@@ -403,11 +403,11 @@ const char * mlt_image_format_name( mlt_image_format format )
 	switch ( format )
 	{
 		case mlt_image_none:    return "none";
-		case mlt_image_rgb24:   return "rgb24";
-		case mlt_image_rgb24a:  return "rgb24a";
+		case mlt_image_rgb:   return "rgb24";
+		case mlt_image_rgba:  return "rgb24a";
 		case mlt_image_yuv422:  return "yuv422";
 		case mlt_image_yuv420p: return "yuv420p";
-		case mlt_image_opengl:  return "opengl";
+		case mlt_image_movit:  return "opengl";
 		case mlt_image_glsl:    return "glsl";
 		case mlt_image_glsl_texture: return "glsl_texture";
 		case mlt_image_yuv422p16: return "yuv422p16";
@@ -451,11 +451,11 @@ int mlt_image_format_size( mlt_image_format format, int width, int height, int *
 	height += 1;
 	switch ( format )
 	{
-		case mlt_image_rgb24:
+		case mlt_image_rgb:
 			if ( bpp ) *bpp = 3;
 			return width * height * 3;
-		case mlt_image_opengl:
-		case mlt_image_rgb24a:
+		case mlt_image_movit:
+		case mlt_image_rgba:
 			if ( bpp ) *bpp = 4;
 			return width * height * 4;
 		case mlt_image_yuv422:
@@ -537,15 +537,15 @@ static int generate_test_image( mlt_properties properties, uint8_t **buffer,  ml
 
 		switch( *format )
 		{
-			case mlt_image_rgb24:
+			case mlt_image_rgb:
 				size *= 3;
 				size += *width * 3;
 				*buffer = mlt_pool_alloc( size );
 				if ( *buffer )
 					memset( *buffer, 255, size );
 				break;
-			case mlt_image_rgb24a:
-			case mlt_image_opengl:
+			case mlt_image_rgba:
+			case mlt_image_movit:
 				size *= 4;
 				size += *width * 4;
 				*buffer = mlt_pool_alloc( size );
@@ -955,7 +955,7 @@ void mlt_frame_write_ppm( mlt_frame frame )
 {
 	int width = 0;
 	int height = 0;
-	mlt_image_format format = mlt_image_rgb24;
+	mlt_image_format format = mlt_image_rgb;
 	uint8_t *image;
 	
 	if ( mlt_frame_get_image( frame, &image, &format, &width, &height, 0 ) == 0 )

@@ -115,7 +115,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		*height = profile->height;
 	}
 
-	*format = mlt_image_rgb24;
+	*format = mlt_image_rgb;
 	mlt_properties_set_int( MLT_FRAME_PROPERTIES(frame), "consumer_deinterlace", 1 );
 	int error = mlt_frame_get_image( frame, image, format, width, height, 1 );
 

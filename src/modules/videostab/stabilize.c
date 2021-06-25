@@ -898,7 +898,7 @@ int stabilize_filter_video(StabData* instance,
 		}
     if (sd->hasSeenOneFrame) {
         sd->curr = sd->grayimage;
-        if (pixelformat == mlt_image_rgb24) {
+        if (pixelformat == mlt_image_rgb) {
             if (sd->algo == 0)
                 addTrans(sd, calcShiftRGBSimple(sd));
             else if (sd->algo == 1)
