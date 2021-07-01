@@ -876,12 +876,12 @@ done:
 
 			op->sr_data = *(klvanc_splice_request_data *) &scte_104;
 
-			result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
-			if (result != S_OK) {
-					mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
-					ret = AVERROR(EIO);
-					goto exit_scte104;
-			}
+			// result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
+			// if (result != S_OK) {
+			// 		mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
+			// 		ret = AVERROR(EIO);
+			// 		goto exit_scte104;
+			// }
 
 			result = klvanc_convert_SCTE_104_to_words(m_vanc_ctx, pkt, &words, &wordCount);
 			if (result != S_OK)  {
