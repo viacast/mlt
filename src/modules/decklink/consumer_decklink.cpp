@@ -43,6 +43,10 @@ extern "C" {
 #include "libklvanc/vanc-lines.h"
 #include "libklvanc/pixels.h"
 
+void *logcb(void *p, int level, const char *fmt, ...) {
+
+}
+
 #define SWAB_SLICED_ALIGN_POW 5
 static int swab_sliced( int id, int idx, int jobs, void* cookie )
 {
@@ -91,9 +95,9 @@ struct SCTE104
 {
 	unsigned int splice_insert_type;
 	unsigned int splice_event_id;
-	unsigned int unique_program_id;
-	unsigned int pre_roll_time;
-	unsigned int brk_duration;
+	unsigned short unique_program_id;
+	unsigned short pre_roll_time;
+	unsigned short brk_duration;
 	unsigned char avail_num;
 	unsigned char avails_expected;
 	unsigned char auto_return_flag;
@@ -208,6 +212,7 @@ public:
 		m_frames_interim = mlt_deque_init();
 		m_buffer = NULL;
 		m_decklinkVideoConversion = NULL;
+		m_vanc_ctx = NULL;
 
 		// operation locks
 		m_op_id = OP_NONE;
@@ -549,7 +554,7 @@ protected:
 		mlt_log_debug( getConsumer(), "%s: starting\n", __FUNCTION__ );
 
 		// if (m_vanc_ctx)
-    	// klvanc_context_destroy(m_vanc_ctx);
+    //   klvanc_context_destroy(m_vanc_ctx);
 		// m_vanc_ctx = NULL;
 
 		// Stop the audio and video output streams immediately
@@ -871,12 +876,12 @@ done:
 
 			op->sr_data = *(klvanc_splice_request_data *) &scte_104;
 
-			// result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
-			// if (result != S_OK) {
-			// 		mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
-			// 		ret = AVERROR(EIO);
-			// 		goto exit_scte104;
-			// }
+			result = klvanc_dump_SCTE_104(m_vanc_ctx, pkt);
+			if (result != S_OK) {
+					mlt_log_error(getConsumer(), "Failed to dump SCTE 104 packet\n");
+					ret = AVERROR(EIO);
+					goto exit_scte104;
+			}
 
 			result = klvanc_convert_SCTE_104_to_words(m_vanc_ctx, pkt, &words, &wordCount);
 			if (result != S_OK)  {
