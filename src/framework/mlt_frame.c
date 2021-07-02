@@ -513,7 +513,7 @@ static int generate_test_image( mlt_properties properties, uint8_t **buffer,  ml
 	{
 		int size = 0;
 
-		uint16_t color_yuv = 0x0080; // 0,128 -> black
+		uint16_t color_yuv = 0x1080; // 16,128 -> black
 
 		char *color = getenv("MLT_BACKGROUND_COLOR");
 
@@ -523,7 +523,7 @@ static int generate_test_image( mlt_properties properties, uint8_t **buffer,  ml
 			else if (!strcmp(color, "green"))
 				color_yuv = 0x0000; // 0,0 -> green
 			else
-				color_yuv = 0x0080;
+				color_yuv = 0x1080;
 		}
 
 		*width = *width == 0 ? 720 : *width;

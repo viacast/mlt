@@ -35,6 +35,9 @@
 #include <stdatomic.h>
 #include <libavutil/imgutils.h>
 
+#define FRAME_SHARED_MEMORY_SIZE 1<<23
+#define AUDIOLEVEL_SHARED_MEMORY_SIZE 1<<10
+
 /** Define this if you want an automatic deinterlace (if necessary) when the
  * consumer's producer is not running at normal speed.
  */
@@ -1630,7 +1633,7 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 	if (!priv->shared_mem_frame) {
 		char *preview_file = mlt_properties_get(properties, "preview_file");
 		if (preview_file) {
-			priv->shared_mem_frame = create_shared_memory(preview_file, 1 << 23);
+			priv->shared_mem_frame = create_shared_memory(preview_file, FRAME_SHARED_MEMORY_SIZE);
 		}
 	}
 
@@ -1640,7 +1643,7 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 		if (preview_file) {
 			char vu_file[strlen(preview_file) + 5];
 			snprintf(vu_file, strlen(preview_file) + 5, "%s.vu", preview_file);
-			priv->shared_mem_audio = create_shared_memory(vu_file, 1 << 10);
+			priv->shared_mem_audio = create_shared_memory(vu_file, AUDIOLEVEL_SHARED_MEMORY_SIZE);
 		}
 	}
 
@@ -1767,6 +1770,36 @@ int mlt_consumer_stop( mlt_consumer self )
 			mlt_log( MLT_CONSUMER_SERVICE( self ), MLT_LOG_ERROR, "system(%s) failed!\n", mlt_properties_get( properties, "post" ) );
 
 	mlt_log( MLT_CONSUMER_SERVICE( self ), MLT_LOG_DEBUG, "stopped\n" );
+
+	if (priv->shared_mem_frame) {
+		int width = mlt_properties_get_int(properties, "width");
+		int height = mlt_properties_get_int(properties, "height");
+		int bpp;
+		mlt_image_format_size(priv->image_format, width, height, &bpp);
+		uint32_t size = width*height*bpp;
+		void *data = malloc(3*sizeof(uint32_t) + size);
+		memcpy(data, (uint32_t *)&width, sizeof(uint32_t));
+		memcpy(data + sizeof(uint32_t), (uint32_t *)&height, sizeof(uint32_t));
+		memcpy(data + 2*sizeof(uint32_t), (uint32_t *)&size, sizeof(uint32_t));
+		for (int i = 0; i < size; i += 2) {
+			// 0x1080 is black in YUV (16,128)
+			memset(data + 3*sizeof(uint32_t) + i, 0x10, 1);
+			memset(data + 3*sizeof(uint32_t) + i + 1, 0x80, 1);
+		}
+		if (write_shared_memory(priv->shared_mem_frame, data, 3*sizeof(uint32_t) + size)) {
+			mlt_log_warning(NULL, "failed to write to shared memory\n");
+		}
+		free(data);
+	}
+
+	if (priv->shared_mem_audio) {
+		uint8_t audio_samples[priv->channels + 1]; // first byte is reserved for # of channels
+		audio_samples[0] = priv->channels;
+		memset(audio_samples + 1, 0, priv->channels);
+		if (write_shared_memory(priv->shared_mem_audio, (void *)audio_samples, sizeof(audio_samples[0])*(priv->channels + 1))) {
+			mlt_log_warning(NULL, "failed to write to shared memory\n");
+		}
+	}
 
 	return 0;
 }
