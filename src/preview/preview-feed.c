@@ -7,7 +7,7 @@
 
 #define METADATA_MODE "metadata"
 #define FEED_MODE "feed"
-#define MAX_FRAME_SIZE 1<<22
+#define MAX_FRAME_SIZE (1L<<22)
 #define MILLI 1000
 
 int main(int argc, char *argv[]) {
@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
   }
 
   FILE *fp = 0;
-  int mode; // 0 -> metadata, 1 -> feed
+  int mode = 0; // 0 -> metadata, 1 -> feed
   int fps;
 
   if (!strcmp(argv[1], METADATA_MODE)) {
@@ -34,47 +34,41 @@ int main(int argc, char *argv[]) {
   }
 
   uint32_t width, height, size;
+  uint8_t data[MAX_FRAME_SIZE + 3*sizeof(uint32_t)];
 
   if (!mode) {
-    fp = fopen(argv[2], "rb");
+    fp = fopen(argv[2], "r");
 
     if (!fp) {
       printf("Failed to open file.\n");
       exit(-1);
     }
 
-    fread(&width, sizeof(uint32_t), 1, fp);
-    fread(&height, sizeof(uint32_t), 1, fp);
-    fread(&size, sizeof(uint32_t), 1, fp);
+    int read = fread(data, MAX_FRAME_SIZE + 3*sizeof(uint32_t), 1, fp);
+    memcpy(&width, data, sizeof(uint32_t));
+    memcpy(&height, data + sizeof(uint32_t), sizeof(uint32_t));
+    memcpy(&size, data + 2*sizeof(uint32_t), sizeof(uint32_t));
 
     printf("%"PRIu32" %"PRIu32" %"PRIu32, width, height, size);
     fclose(fp);
     exit(0);
   }
 
-  uint8_t frame[MAX_FRAME_SIZE];
-  fp = fopen(argv[2], "rb");
-
   while (1) {
+    fp = fopen(argv[2], "r");
     if (!fp) {
-      fp = fopen(argv[2], "rb");
-      sleep(1);
+      usleep(1000*MILLI/fps/10);
       continue;
     }
+    int read = fread(data, MAX_FRAME_SIZE + 3*sizeof(uint32_t), 1, fp);
+    memcpy(&width, data, sizeof(uint32_t));
+    memcpy(&height, data + sizeof(uint32_t), sizeof(uint32_t));
+    memcpy(&size, data + 2*sizeof(uint32_t), sizeof(uint32_t));
 
-    fread(&width, sizeof(uint32_t), 1, fp);
-    fread(&height, sizeof(uint32_t), 1, fp);
-    fread(&size, sizeof(uint32_t), 1, fp);
-    fread(frame, sizeof(uint8_t), size, fp);
-
-    write(fileno(stdout), frame, size*sizeof(uint8_t));
-
+    int wrote = write(fileno(stdout), data + 3*sizeof(uint32_t), size*sizeof(uint8_t));
     fclose(fp);
-    fp = 0;
     usleep(1000*MILLI/fps);
   }
-
-  fclose(fp);    
 
   return 0;
 }
