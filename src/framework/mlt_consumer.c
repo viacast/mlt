@@ -1687,10 +1687,14 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 		audio_samples[0] = priv->channels;
 		memset(audio_samples + 1, 0, priv->channels);
 
-		for (int i = 0; i < priv->channels; ++i) {
-			char key[50];
-			snprintf(key, 50, "_audio_level.%d", i);
-			audio_samples[i+1] = MIN(255, 255*mlt_properties_get_double(MLT_FILTER_PROPERTIES(priv->audio_level), key));
+		int _speed = mlt_properties_get_double(MLT_FRAME_PROPERTIES(frame), "_speed");
+		if (_speed) {
+			// only writes the audiolevel when playing, writes 0s otherwise
+			for (int i = 0; i < priv->channels; ++i) {
+				char key[50];
+				snprintf(key, 50, "_audio_level.%d", i);
+				audio_samples[i+1] = MIN(255, 255*mlt_properties_get_double(MLT_FILTER_PROPERTIES(priv->audio_level), key));
+			}
 		}
 
 		if (write_shared_memory(priv->shared_mem_audio, (void *)audio_samples, sizeof(audio_samples[0])*(priv->channels + 1))) {
