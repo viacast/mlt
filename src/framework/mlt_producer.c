@@ -761,15 +761,15 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 
 	int watermarkIsGlobal = 0;
 	char watermark_prop_name[1024];
-	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark", playcast_id);
-	char *watermark_prop = mlt_properties_get(frame_properties, watermark_prop_name);
-	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.geometry", playcast_id);
+	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark.filepath", playcast_id);
+	char *watermark_filepath = mlt_properties_get(frame_properties, watermark_prop_name);
+	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark.geometry", playcast_id);
 	char *watermark_geometry = mlt_properties_get(frame_properties, watermark_prop_name);
 
-	if (!watermark_prop || !strlen(watermark_prop)) {
-		watermark_prop = mlt_properties_get(frame_properties, "meta.playcast.watermark");
-		watermark_geometry = mlt_properties_get(frame_properties, "meta.playcast.geometry");
-		if (!watermark_prop || !strlen(watermark_prop)) {
+	if (!watermark_filepath || !strlen(watermark_filepath)) {
+		watermark_filepath = mlt_properties_get(frame_properties, "meta.playcast.watermark.filepath");
+		watermark_geometry = mlt_properties_get(frame_properties, "meta.playcast.watermark.geometry");
+		if (!watermark_filepath || !strlen(watermark_filepath)) {
 			goto skip_watermark;
 		}
 		watermarkIsGlobal = 1;
@@ -810,7 +810,7 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 					mlt_producer_attach(avproducer, watermark);
 				}
 				mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
-				mlt_properties_set(wm_properties, "resource", watermark_prop);
+				mlt_properties_set(wm_properties, "resource", watermark_filepath);
 				if (watermark_geometry && strlen(watermark_geometry)) {
 					mlt_properties_set(wm_properties, "composite.geometry", watermark_geometry);
 				} else {
