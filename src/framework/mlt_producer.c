@@ -783,10 +783,13 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 
 	for (int i = 0; i < playlist->count; ++i) {
 		mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[i]->producer)), "multitrack", NULL);
-		if (!multitrack) {
+		if (!multitrack || !multitrack->list || !multitrack->count) {
 			goto skip_watermark;
 		}
 		mlt_track track = multitrack->list[0];
+		if (!track || !track->producer) {
+			goto skip_watermark;
+		}
 		mlt_playlist playlist2 = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(track->producer), "playlist", NULL);
 		if (!playlist2) {
 			goto skip_watermark;
@@ -794,32 +797,33 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 		int found = 0;
 		for (int j = 0; j < playlist2->count; ++j) {
 			mlt_producer avproducer = mlt_producer_cut_parent(playlist2->list[j]->producer);
+			if (!avproducer) {
+				continue;
+			}
 			mlt_properties avproperties = MLT_PRODUCER_PROPERTIES(avproducer);
-			if (avproducer) {
-				if (!watermarkIsGlobal) {
-					char *avproducer_playcast_id = mlt_properties_get(avproperties, "meta.playcast.id");
-					if (!avproducer_playcast_id || strcmp(avproducer_playcast_id, playcast_id)) {
-						continue;
-					}
+			if (!watermarkIsGlobal) {
+				char *avproducer_playcast_id = mlt_properties_get(avproperties, "meta.playcast.id");
+				if (!avproducer_playcast_id || strcmp(avproducer_playcast_id, playcast_id)) {
+					continue;
 				}
-				mlt_filter watermark = mlt_properties_get_data(avproperties, "watermark", NULL);
-				if(!watermark) {
-					mlt_profile profile = mlt_service_profile(MLT_PRODUCER_SERVICE(avproducer));
-					watermark = mlt_factory_filter(profile, "watermark", NULL);
-					mlt_properties_set_data(avproperties, "watermark", watermark, 0, (mlt_destructor)mlt_filter_close, NULL);
-					mlt_producer_attach(avproducer, watermark);
-				}
-				mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
-				mlt_properties_set(wm_properties, "resource", watermark_filepath);
-				if (watermark_geometry && strlen(watermark_geometry)) {
-					mlt_properties_set(wm_properties, "composite.geometry", watermark_geometry);
-				} else {
-					mlt_properties_set(wm_properties, "composite.geometry", "0/0:100%x100%");
-				}
-				if (!watermarkIsGlobal) {
-					found = 1;
-					break;
-				}
+			}
+			mlt_filter watermark = mlt_properties_get_data(avproperties, "watermark", NULL);
+			if(!watermark) {
+				mlt_profile profile = mlt_service_profile(MLT_PRODUCER_SERVICE(avproducer));
+				watermark = mlt_factory_filter(profile, "watermark", NULL);
+				mlt_properties_set_data(avproperties, "watermark", watermark, 0, (mlt_destructor)mlt_filter_close, NULL);
+				mlt_producer_attach(avproducer, watermark);
+			}
+			mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
+			mlt_properties_set(wm_properties, "resource", watermark_filepath);
+			if (watermark_geometry && strlen(watermark_geometry)) {
+				mlt_properties_set(wm_properties, "composite.geometry", watermark_geometry);
+			} else {
+				mlt_properties_set(wm_properties, "composite.geometry", "0/0:100%x100%");
+			}
+			if (!watermarkIsGlobal) {
+				found = 1;
+				break;
 			}
 		}
 		if (!watermarkIsGlobal && found) {
