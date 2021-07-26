@@ -1,0 +1,80 @@
+# gcc-7 for mlt
+# gcc-4.9 for everything else
+# https://tuxamito.com/wiki/index.php/Installing_newer_GCC_versions_in_Ubuntu
+
+## regular deps
+# automake libpcre3-dev flex libdbus yasm libdbus-1-dev libasound2-dev 
+
+## deb http://br.archive.ubuntu.com/ubuntu bionic main
+# libtool libtheora-dev libspeex-dev libspeexdsp-dev
+
+## deb http://security.ubuntu.com/ubuntu bionic-security main
+# libxkbcommon-dev
+
+# nasm 2.13 https://www.linuxfromscratch.org/blfs/view/8.1/general/nasm.html
+
+# libvorbis-dev 1.3.7 https://github.com/xiph/vorbis/releases/tag/v1.3.7
+
+# swig https://github.com/swig/swig/releases/tag/v4.0.2
+
+# libsdl2-dev https://github.com/libsdl-org/SDL/releases/tag/release-2.0.14
+mkdir build
+cd build
+../configure
+make && make install
+
+# libxml2-dev https://gitlab.gnome.org/GNOME/libxml2/-/archive/v2.9.12/libxml2-v2.9.12.tar.gz
+apt-get install libpython-dev
+./autogen.sh --enable-static --enable-shared
+make && make install
+
+# cmake https://github.com/Kitware/CMake/releases/tag/v2.8.12.2
+./configure
+make && make install
+
+# gperf https://launchpad.net/ubuntu/+source/gperf/3.0.4-1
+
+# nspr https://www.linuxfromscratch.org/blfs/view/7.4/general/nspr.html
+
+# nss https://www.linuxfromscratch.org/blfs/view/7.4/postlfs/nss.html
+# https://www.linuxfromscratch.org/patches/downloads/nss/nss-3.15.1-standalone-2.patch
+
+# libqt5-dev https://github.com/jcfr/qt-easy-build/tree/5.15.1#readme
+# apt-get install libx11-dev libfreetype6-dev libSM-dev libXrender-dev libfontconfig-dev libXext-dev libgl1-mesa-dev libglu1-mesa-dev
+# build with gcc-7
+
+# libsox-dev https://github.com/dmkrepo/libsox
+autoreconf -i
+./configure
+make -s && make install
+
+# libklvanc https://github.com/stoth68000/libklvanc
+./autogen.sh --build
+./configure --enable-shared=no
+make && make install
+
+# libsndfile-dev https://www.linuxfromscratch.org/blfs/view/svn/multimedia/libsndfile.html
+# libudev1 https://launchpad.net/ubuntu/trusty/amd64/libudev1/204-5ubuntu20.25
+# libudev-dev https://launchpad.net/ubuntu/trusty/amd64/libudev-dev/204-5ubuntu20.25
+# libpulse-dev https://www.linuxfromscratch.org/blfs/view/svn/multimedia/pulseaudio.html
+./configure --without-caps --enable-udev --with-speex
+make && make install
+
+# python3.6.14 https://github.com/python/cpython/tree/v3.6.14
+./configure --enable-shared
+
+
+####################################
+# intltool https://launchpad.net/intltool/trunk/0.51.0/+download/intltool-0.51.0.tar.gz
+
+## src/rugen/autogen
+# aclocal
+# autoheader
+# automake --force-missing --add-missing
+# autoconf
+
+# libglib-dev http://launchpadlibrarian.net/171685671/libglib2.0-dev_2.40.0-2_amd64.deb http://launchpadlibrarian.net/171685667/libglib2.0-0_2.40.0-2_amd64.deb http://launchpadlibrarian.net/171685670/libglib2.0-bin_2.40.0-2_amd64.deb
+# atk https://download.gnome.org/sources/atk/2.9/atk-2.9.4.tar.xz
+# freetype https://github.com/freetype/freetype/tree/VER-2-11-0
+# pango https://download.gnome.org/sources/pango/1.2/pango-1.2.5.tar.gz
+# gtk+2.0 https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/gtk+2.0/2.24.23-0ubuntu1/gtk+2.0_2.24.23.orig.tar.xz
