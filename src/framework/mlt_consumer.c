@@ -85,6 +85,7 @@ typedef struct
 	SharedMemory *shared_mem_frame;
 	SharedMemory *shared_mem_audio;
 	mlt_filter audio_level;
+	uint64_t frame_count;
 }
 consumer_private;
 
@@ -1634,6 +1635,11 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 		char *preview_file = mlt_properties_get(properties, "preview_file");
 		if (preview_file) {
 			priv->shared_mem_frame = create_shared_memory(preview_file, FRAME_SHARED_MEMORY_SIZE);
+			priv->shared_mem_frame->step = 1;
+			int preview_step = mlt_properties_get_int(properties, "preview_step");
+			if (preview_step) {
+				priv->shared_mem_frame->step = preview_step;
+			}
 		}
 	}
 
@@ -1647,7 +1653,7 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 		}
 	}
 
-	if (frame && priv->shared_mem_frame) {
+	if (frame && priv->shared_mem_frame && !(priv->frame_count++ % priv->shared_mem_frame->step) ) {
 		uint8_t *image;
 		int width = mlt_properties_get_int(properties, "width");
 		int height = mlt_properties_get_int(properties, "height");
@@ -1663,11 +1669,6 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 			memcpy(data, (uint32_t *)&width, sizeof(uint32_t));
 			memcpy(data + sizeof(uint32_t), (uint32_t *)&height, sizeof(uint32_t));
 			memcpy(data + 2*sizeof(uint32_t), (uint32_t *)&size, sizeof(uint32_t));
-
-			// for (int i = 0; i < size; i += 2) {  // reorder image bytes before copying
-			// 	((uint8_t *)data)[3*sizeof(uint32_t) + i] = image[i+1];
-			// 	((uint8_t *)data)[3*sizeof(uint32_t) + i + 1] = image[i];
-			// }
 
 			memcpy(data + 3*sizeof(uint32_t), image, size);
 

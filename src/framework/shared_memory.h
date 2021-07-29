@@ -16,6 +16,7 @@ typedef struct {
   char backing_file[20];
 	caddr_t memory;
 	sem_t *semaphore;
+	int step;
 } SharedMemory;
 
 void dispose_shared_memory(SharedMemory *shared);
