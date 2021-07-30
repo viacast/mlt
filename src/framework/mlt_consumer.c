@@ -33,6 +33,8 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <stdatomic.h>
+#include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 
 #define FRAME_SHARED_MEMORY_SIZE 1<<23
@@ -85,6 +87,8 @@ typedef struct
 	SharedMemory *shared_mem_frame;
 	SharedMemory *shared_mem_audio;
 	mlt_filter audio_level;
+	int preview_width;
+	int preview_height;
 	uint64_t frame_count;
 }
 consumer_private;
@@ -1632,8 +1636,10 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 	}
 
 	if (!priv->shared_mem_frame) {
+		priv->preview_width = mlt_properties_get_int(properties, "preview_width");
+		priv->preview_height = mlt_properties_get_int(properties, "preview_height");
 		char *preview_file = mlt_properties_get(properties, "preview_file");
-		if (preview_file) {
+		if (preview_file && priv->preview_width && priv->preview_height) {
 			priv->shared_mem_frame = create_shared_memory(preview_file, FRAME_SHARED_MEMORY_SIZE);
 			priv->shared_mem_frame->step = 1;
 			int preview_step = mlt_properties_get_int(properties, "preview_step");
@@ -1654,30 +1660,88 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 	}
 
 	if (frame && priv->shared_mem_frame && !(priv->frame_count++ % priv->shared_mem_frame->step) ) {
-		uint8_t *image;
 		int width = mlt_properties_get_int(properties, "width");
 		int height = mlt_properties_get_int(properties, "height");
 		int bpp;
 		mlt_image_format_size(priv->image_format, width, height, &bpp);
 		uint32_t size = width*height*bpp;
+
+		uint8_t *image;
 		mlt_frame_get_image(frame, &image, &priv->image_format, &width, &height, 1);
-	
-		if (!image) {
-			mlt_log_warning(NULL, "failed to get image\n");
-		} else { 
+
+		if (priv->preview_width != width || priv->preview_height != height) {
+			int owidth = priv->preview_width;
+			int oheight = priv->preview_height;
+			int interp = SWS_POINT;
+			mlt_image_format_size(priv->image_format, owidth, oheight, &bpp);
+			uint32_t out_size = owidth*oheight*bpp;
+
+			int avformat;
+			switch( priv->image_format )
+			{
+				case mlt_image_rgb:
+					avformat = AV_PIX_FMT_RGB24;
+					break;
+				case mlt_image_rgba:
+				case mlt_image_movit:
+					avformat = AV_PIX_FMT_RGBA;
+					break;
+				case mlt_image_yuv422:
+					avformat = AV_PIX_FMT_YUYV422;
+					break;
+				case mlt_image_yuv420p:
+					avformat = AV_PIX_FMT_YUV420P;
+					break;
+				default:
+					goto skip_frame_preview;
+					break;
+			}
+
+			uint8_t *in_data[4];
+			int in_stride[4];
+			uint8_t *out_data[4];
+			int out_stride[4];
+			uint8_t *outbuf = mlt_pool_alloc( out_size );
+
+			av_image_fill_arrays(in_data, in_stride, image, avformat, width, height, 1);
+			av_image_fill_arrays(out_data, out_stride, outbuf, avformat, owidth, oheight, 1);
+
+			struct SwsContext *context = sws_getContext( width, height, avformat, owidth, oheight, avformat, interp, NULL, NULL, NULL);
+			if (!context) {
+				mlt_log_warning(NULL, "frame preview: failed to create swscontext\n");
+				goto skip_frame_preview;
+			}
+
+			sws_scale( context, (const uint8_t **) in_data, in_stride, 0, height, out_data, out_stride);
+			sws_freeContext( context );
+
+			if (!outbuf) {
+				mlt_log_warning(NULL, "frame preview: failed to scale image\n");
+				goto skip_frame_preview;
+			}
+			void *data = malloc(3*sizeof(uint32_t) + out_size);
+			memcpy(data, (uint32_t *)&owidth, sizeof(uint32_t));
+			memcpy(data + sizeof(uint32_t), (uint32_t *)&oheight, sizeof(uint32_t));
+			memcpy(data + 2*sizeof(uint32_t), (uint32_t *)&out_size, sizeof(uint32_t));
+			memcpy(data + 3*sizeof(uint32_t), outbuf, out_size);
+			if (write_shared_memory(priv->shared_mem_frame, data, 3*sizeof(uint32_t) + out_size)) {
+				mlt_log_warning(NULL, "failed to write to shared memory\n");
+			}
+			free(data);
+			mlt_pool_release(outbuf);
+		} else {
 			void *data = malloc(3*sizeof(uint32_t) + size);
 			memcpy(data, (uint32_t *)&width, sizeof(uint32_t));
 			memcpy(data + sizeof(uint32_t), (uint32_t *)&height, sizeof(uint32_t));
 			memcpy(data + 2*sizeof(uint32_t), (uint32_t *)&size, sizeof(uint32_t));
-
 			memcpy(data + 3*sizeof(uint32_t), image, size);
-
 			if (write_shared_memory(priv->shared_mem_frame, data, 3*sizeof(uint32_t) + size)) {
 				mlt_log_warning(NULL, "failed to write to shared memory\n");
 			}
 			free(data);
 		}
 	}
+skip_frame_preview:
 
 	if (!audio_off && priv->shared_mem_audio && priv->audio_level) {
 		samples = mlt_audio_calculate_frame_samples( priv->fps, priv->frequency, priv->aud_counter );
