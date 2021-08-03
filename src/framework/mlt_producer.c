@@ -759,6 +759,51 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 
 	char *playcast_id = mlt_properties_get(frame_properties, "meta.playcast.id");
 
+	int _speed = mlt_properties_get_int(frame_properties, "_speed");
+	int position = mlt_properties_get_int(frame_properties, "original_position");
+	int in_point = mlt_properties_get_int(frame_properties, "in");
+	int out_point = mlt_properties_get_int(frame_properties, "out");
+
+	int is_first_frame = 0;
+	int is_last_frame = 0;
+
+	if (_speed) {
+		is_first_frame = position == in_point + 1;
+		is_last_frame = position == out_point;
+	}
+
+	if (!is_first_frame && !is_last_frame) {
+		goto skip_handle_pause;
+	}
+
+	// TODO: handle pause
+
+skip_handle_pause:
+	if (!is_first_frame && !is_last_frame) {
+		goto skip_run_sh;
+	}
+
+	char run_sh_prop_name[1024];
+	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run_sh.start", playcast_id);
+	char *command_start = mlt_properties_get(frame_properties, run_sh_prop_name);
+	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run_sh.end", playcast_id);
+	char *command_end = mlt_properties_get(frame_properties, run_sh_prop_name);
+
+	if (!command_start && !command_end) {
+		goto skip_run_sh;
+	}
+
+	char command_fork[10240];
+	if (is_first_frame && command_start) {
+		snprintf(command_fork, 10239, "%s &", command_start);
+		system(command_fork);
+	}
+	if (is_last_frame && command_end) {
+		snprintf(command_fork, 10239, "%s &", command_end);
+		system(command_fork);
+	}
+
+skip_run_sh:;
 	int watermarkIsGlobal = 0;
 	char watermark_prop_name[1024];
 	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark.filepath", playcast_id);
@@ -840,19 +885,6 @@ skip_watermark:
 	char *scte_blocks_prop = mlt_properties_get(frame_properties, "meta.playcast.scte-blocks");
 	if (!scte_blocks_prop) {
 		goto skip_scte;
-	}
-
-	int _speed = mlt_properties_get_int(frame_properties, "_speed");
-	int position = mlt_properties_get_int(frame_properties, "original_position");
-	int in_point = mlt_properties_get_int(frame_properties, "in");
-	int out_point = mlt_properties_get_int(frame_properties, "out");
-
-	int is_first_frame = 0;
-	int is_last_frame = 0;
-
-	if (_speed) {
-		is_first_frame = position == in_point + 1;
-		is_last_frame = position == out_point;
 	}
 
 	if (!is_first_frame && !is_last_frame) {
