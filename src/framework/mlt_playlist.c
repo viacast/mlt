@@ -524,7 +524,7 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 	) {
 		mlt_producer_set_speed(self, 0);
 		if (pause_start) {
-			mlt_producer_seek(self, position + 1);
+			mlt_producer_seek(self, original + 1);
 		}
 	}
 	return MLT_PRODUCER_SERVICE( producer );
