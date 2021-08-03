@@ -749,15 +749,15 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
 
 	// fprintf(stderr, "\n");
-	// mlt_properties_dump(frame_properties, stderr);
-	// fprintf(stderr, "\n");
 	// mlt_properties_dump(producer_properties, stderr);
 
 	if (!frame) {
 		goto skip_playcast;
 	}
 
+	mlt_playlist playlist = mlt_properties_get_data(producer_properties, "playlist", NULL);
 	char *playcast_id = mlt_properties_get(frame_properties, "meta.playcast.id");
+	mlt_properties_set(MLT_PRODUCER_PROPERTIES(playlist), "meta.playcast.current-id", playcast_id);
 
 	int _speed = mlt_properties_get_int(frame_properties, "_speed");
 	int position = mlt_properties_get_int(frame_properties, "original_position");
@@ -772,13 +772,6 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 		is_last_frame = position == out_point;
 	}
 
-	if (!is_first_frame && !is_last_frame) {
-		goto skip_handle_pause;
-	}
-
-	// TODO: handle pause
-
-skip_handle_pause:
 	if (!is_first_frame && !is_last_frame) {
 		goto skip_run_sh;
 	}
@@ -795,15 +788,21 @@ skip_handle_pause:
 
 	char command_fork[10240];
 	if (is_first_frame && command_start) {
+		fprintf(stderr, "run start\n");
 		snprintf(command_fork, 10239, "%s &", command_start);
 		system(command_fork);
 	}
 	if (is_last_frame && command_end) {
+		fprintf(stderr, "run end\n");
 		snprintf(command_fork, 10239, "%s &", command_end);
 		system(command_fork);
 	}
 
 skip_run_sh:;
+	if (!playlist) {
+		goto skip_watermark;
+	}
+
 	int watermarkIsGlobal = 0;
 	char watermark_prop_name[1024];
 	snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark.filepath", playcast_id);
@@ -818,12 +817,6 @@ skip_run_sh:;
 			goto skip_watermark;
 		}
 		watermarkIsGlobal = 1;
-	}
-
-	mlt_playlist playlist = mlt_properties_get_data(producer_properties, "playlist", NULL);
-
-	if (!playlist) {
-		goto skip_watermark;
 	}
 
 	for (int i = 0; i < playlist->count; ++i) {

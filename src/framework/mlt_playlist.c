@@ -504,19 +504,28 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 	if ( original == total - 2 )
 		mlt_events_fire( properties, "playlist-next", i, NULL );
 
-	int was_playing = mlt_properties_get_int(properties, "was-playing");
-	int pause_clip = !strcmp(eof, "pause-clip") && original == total - 1 && was_playing;
-	mlt_properties_set_int(properties, "was-playing", (int)(mlt_producer_get_speed(self) != 0));
-	// Ideally this should be set as late as possible,
-	// since if we seek to another clip, this isn't reset.
-	// This could be solved by using another prop
-	// to set the clip index or clip id
-	char *pause = mlt_properties_get(properties, "pause");
-	int pause_start = pause && !strcmp(pause, "start") && position == 0;
-	int pause_end = pause && !strcmp(pause, "end") && original == total - 1;
-	if (pause_start || pause_end || pause_clip) {
-		mlt_properties_set(properties, "pause", NULL);
+	// mlt_properties_dump(MLT_PRODUCER_PROPERTIES(self), stderr);
+	// fprintf(stderr, "\n");
+
+	char *playcast_id = mlt_properties_get(self, "meta.playcast.current-id");
+	int is_last_frame = original == total - 1;
+
+	char pause_prop_name[1024];
+	snprintf(pause_prop_name, 1023, "meta.playcast.%s.pause-start", playcast_id);
+	int pause_start = mlt_properties_get_int(self, pause_prop_name);
+	snprintf(pause_prop_name, 1023, "meta.playcast.%s.pause-end", playcast_id);
+	int pause_end = mlt_properties_get_int(self, pause_prop_name);
+
+	int was_playing = mlt_properties_get_int(properties, "meta.playcast.was-playing");
+	mlt_properties_set_int(properties, "meta.playcast.was-playing", (int)(mlt_producer_get_speed(self) != 0));
+	if (
+		was_playing && is_last_frame && 
+		(pause_start || pause_end || !strcmp(eof, "pause-clip"))
+	) {
 		mlt_producer_set_speed(self, 0);
+		if (pause_start) {
+			mlt_producer_seek(self, position + 1);
+		}
 	}
 	return MLT_PRODUCER_SERVICE( producer );
 }
