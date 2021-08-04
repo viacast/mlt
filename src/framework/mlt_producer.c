@@ -787,12 +787,14 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	}
 
 	char command_fork[10240];
-	if (is_first_frame && command_start) {
+	if (is_first_frame && command_start && strlen(command_start)) {
 		snprintf(command_fork, 10239, "%s &", command_start);
+		fprintf(stderr, "run start \"%s\"\n", command_fork);
 		system(command_fork);
 	}
-	if (is_last_frame && command_end) {
+	if (is_last_frame && command_end && strlen(command_end)) {
 		snprintf(command_fork, 10239, "%s &", command_end);
+		fprintf(stderr, "run end \"%s\"\n", command_fork);
 		system(command_fork);
 	}
 
@@ -897,24 +899,20 @@ skip_watermark:
 	int actual_block_event_count;
 	int event_index;
 
-	// mlt_log_warning(NULL, "scte_blocks=%s\n", scte_blocks);
 	const char delim[2] = ":";
 	block_id = strtok_r(scte_blocks, delim, &save_scte_blocks);
 
 	while (block_id) {
-		// mlt_log_warning(NULL, "block_id=%s:playcast_id=%s\n", block_id, playcast_id);
 		block_event_count = 0;
 		char block_events_prop_name[10240];
 		snprintf(block_events_prop_name, 10239, "meta.playcast.scte-blocks.%s.events", block_id);
 		char *block_events_prop = mlt_properties_get(frame_properties, block_events_prop_name);
-		// mlt_log_warning(NULL, "block_events_prop=%s\n", block_events_prop);
 		if (block_events_prop && strlen(block_events_prop)) {
 			char block_events[10240];
 			strncpy(block_events, block_events_prop, 10239);
 			char *save_block_events = block_events;
 			event_id = strtok_r(block_events, delim, &save_block_events);
 			while (event_id && strlen(event_id)) {
-				// mlt_log_warning(NULL, "event_id=%s\n", event_id);
 				if (!strcmp(event_id, playcast_id)) {
 					strcpy(actual_block, block_id);
 					event_index = block_event_count;
