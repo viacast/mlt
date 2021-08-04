@@ -788,12 +788,10 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 
 	char command_fork[10240];
 	if (is_first_frame && command_start) {
-		fprintf(stderr, "run start\n");
 		snprintf(command_fork, 10239, "%s &", command_start);
 		system(command_fork);
 	}
 	if (is_last_frame && command_end) {
-		fprintf(stderr, "run end\n");
 		snprintf(command_fork, 10239, "%s &", command_end);
 		system(command_fork);
 	}
