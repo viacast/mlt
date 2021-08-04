@@ -777,9 +777,9 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	}
 
 	char run_sh_prop_name[1024];
-	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run_sh.start", playcast_id);
+	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run-sh-start", playcast_id);
 	char *command_start = mlt_properties_get(frame_properties, run_sh_prop_name);
-	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run_sh.end", playcast_id);
+	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run-sh-end", playcast_id);
 	char *command_end = mlt_properties_get(frame_properties, run_sh_prop_name);
 
 	if (!command_start && !command_end) {
