@@ -1218,6 +1218,10 @@ exit_scte104:
 	virtual HRESULT STDMETHODCALLTYPE ScheduledFrameCompleted( IDeckLinkVideoFrame* completedFrame, BMDOutputFrameCompletionResult completed )
 	{
 		mlt_log_debug( getConsumer(), "%s: ENTERING\n", __FUNCTION__ );
+		// int preroll = mlt_properties_get_int(MLT_CONSUMER_PROPERTIES(getConsumer()), "preroll");
+		// if (mlt_deque_count(m_frames) != preroll) {
+		// 	mlt_log_warning( getConsumer(), "frames in queue different from set preroll (%d != %d)\n", mlt_deque_count(m_frames), preroll);
+		// }
 
 		// mlt_deque_push_back(m_frames, completedFrame);
 		if (void *frame = mlt_deque_pop_front(m_frames_interim))

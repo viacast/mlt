@@ -675,17 +675,19 @@ static int get_basic_info( producer_avformat self, mlt_profile profile, const ch
 		else if ( format->nb_streams > 0 && format->streams[0]->codecpar && format->streams[0]->codecpar->codec_id == AV_CODEC_ID_WEBP )
 		{
 			char *e = getenv( "MLT_DEFAULT_PRODUCER_LENGTH" );
-			int p = e ? atoi( e ) : 15000;
+			int p = e ? atoi( e ) : 1;
 			mlt_properties_set_int( properties, "out", MAX(0, p - 1) );
 			mlt_properties_set_int( properties, "length", p );
 		}
 		else
 		{
-			// Set live sources to run forever
+			char *e = getenv("MLT_DEFAULT_LIVE_SOURCE_LENGTH");
+			// defaults to ~24hrs at 29.97 fps
+			int p = e ? atoi( e ) : 2589411;
 			if ( mlt_properties_get_position( properties, "length" ) <= 0 )
-				mlt_properties_set_position( properties, "length", INT_MAX );
+				mlt_properties_set_position( properties, "length", p );
 			if ( mlt_properties_get_position( properties, "out" ) <= 0 )
-				mlt_properties_set_position( properties, "out", INT_MAX - 1 );
+				mlt_properties_set_position( properties, "out", p - 1 );
 			mlt_properties_set( properties, "eof", "loop" );
 		}
 	}
