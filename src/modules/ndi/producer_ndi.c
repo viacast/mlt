@@ -96,9 +96,11 @@ static void* producer_ndi_feeder( void* p )
 		// check if request present in sources list
 		ndi_srcs = NDIlib_find_get_current_sources( ndi_find, &n );
 		mlt_log_debug( MLT_PRODUCER_SERVICE( producer ), "%s: found %d sources\n", __FUNCTION__, n );
-		for ( j = 0; j < n && ndi_src_idx == -1; j++ )
-			if ( !strcmp( self->arg, ndi_srcs[j].p_ndi_name ) )
+		for ( j = 0; j < n && ndi_src_idx == -1; j++ ) {
+			if (!strcmp(self->arg, ndi_srcs[j].p_ndi_name)) {
 				ndi_src_idx = j;
+			}
+		}
 	}
 
 	// exit if nothing
@@ -487,9 +489,9 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr pframe, int index )
 		{
 			mlt_properties_set_data( p, "ndi_video", (void *)video, 0, mlt_pool_release, NULL );
 			mlt_frame_push_get_image( frame, get_image );
+		} else {
+			mlt_log_debug(producer, "%s:%d: NO VIDEO\n", __FILE__, __LINE__);
 		}
-		else
-			mlt_log_error( NULL, "%s:%d: NO VIDEO\n", __FILE__, __LINE__ );
 
 		if ( audio_frame )
 		{
@@ -578,7 +580,7 @@ mlt_producer producer_ndi_init( mlt_profile profile, mlt_service_type type, cons
 		mlt_properties properties = MLT_CONSUMER_PROPERTIES( parent );
 
 		// Setup context
-		self->arg = strdup( arg );
+		self->arg = strdup( arg && strlen(arg) ? arg + 1 : arg );
 		pthread_mutex_init( &self->lock, NULL );
 		pthread_cond_init( &self->cond, NULL );
 		self->v_queue = mlt_deque_init();
@@ -591,9 +593,13 @@ mlt_producer producer_ndi_init( mlt_profile profile, mlt_service_type type, cons
 		parent->close = (mlt_destructor) producer_ndi_close;
 		parent->get_frame = get_frame;
 
-		// These properties effectively make it infinite.
-		mlt_properties_set_int( properties, "length", INT_MAX );
-		mlt_properties_set_int( properties, "out", INT_MAX - 1 );
+		char *e = getenv("MLT_DEFAULT_LIVE_SOURCE_LENGTH");
+		// defaults to ~24hrs at 29.97 fps
+		int p = e ? atoi( e ) : 2589411;
+
+		mlt_properties_set(properties, "resource", self->arg);
+		mlt_properties_set_int( properties, "length", p );
+		mlt_properties_set_int( properties, "out", p - 1 );
 		mlt_properties_set( properties, "eof", "loop" );
 
 		return parent;

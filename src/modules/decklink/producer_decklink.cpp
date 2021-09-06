@@ -877,9 +877,13 @@ mlt_producer producer_decklink_init( mlt_profile profile, mlt_service_type type,
 			mlt_properties_set_int( properties, "buffer", 25 );
 			mlt_properties_set_int( properties, "prefill", 25 );
 
+			char *e = getenv("MLT_DEFAULT_LIVE_SOURCE_LENGTH");
+			// defaults to ~24hrs at 29.97 fps
+			int p = e ? atoi( e ) : 2589411;
+
 			// These properties effectively make it infinite.
-			mlt_properties_set_int( properties, "length", INT_MAX );
-			mlt_properties_set_int( properties, "out", INT_MAX - 1 );
+			mlt_properties_set_int( properties, "length", p );
+			mlt_properties_set_int( properties, "out", p - 1 );
 			mlt_properties_set( properties, "eof", "loop" );
 
 			mlt_event event = mlt_events_listen( properties, properties, "property-changed", (mlt_listener) on_property_changed );
