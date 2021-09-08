@@ -659,7 +659,6 @@ int mlt_frame_get_image( mlt_frame self, uint8_t **buffer, mlt_image_format *for
 	else
 	{
 		error = generate_test_image( properties, buffer, format, width, height, writable );
-		mlt_properties_set_int(properties, "meta.skip-frame", 1);
 	}
 
 	if (mlt_properties_get_int(properties, "meta.skip-frame")) {
