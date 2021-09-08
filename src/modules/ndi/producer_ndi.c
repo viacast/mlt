@@ -597,7 +597,9 @@ mlt_producer producer_ndi_init( mlt_profile profile, mlt_service_type type, cons
 		// defaults to ~24hrs at 29.97 fps
 		int p = e ? atoi( e ) : 2589411;
 
-		mlt_properties_set(properties, "resource", self->arg);
+		char resource[1024];
+		sprintf(resource, "ndi:%s", self->arg);
+		mlt_properties_set(properties, "resource", resource);
 		mlt_properties_set_int( properties, "length", p );
 		mlt_properties_set_int( properties, "out", p - 1 );
 		mlt_properties_set( properties, "eof", "loop" );
