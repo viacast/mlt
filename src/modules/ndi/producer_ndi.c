@@ -343,6 +343,8 @@ static int get_image( mlt_frame frame, uint8_t **buffer, mlt_image_format *forma
 			( video->frame_format_type == NDIlib_frame_format_type_interleaved ) );
 
 		NDIlib_recv_free_video( recv, video );
+	} else {
+		return -1;
 	}
 
 	return 0;
@@ -589,8 +591,8 @@ mlt_producer producer_ndi_init( mlt_profile profile, mlt_service_type type, cons
 		self->a_queue = mlt_deque_init();
 		self->v_queue_limit = 30;
 		self->a_queue_limit = 30;
-		self->v_prefill_high = 20;
-		self->v_prefill_low = 5;
+		self->v_prefill_high = 1;
+		self->v_prefill_low = 1;
 
 		// Set callbacks
 		parent->close = (mlt_destructor) producer_ndi_close;

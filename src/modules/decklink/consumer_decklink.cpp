@@ -989,7 +989,7 @@ exit_scte104:
 		{
 			uint8_t* buffer = NULL;
 			decklinkFrame->GetBytes( (void**) &buffer );
-			if ( buffer )
+			if ( buffer && m_buffer )
 				memcpy( buffer, m_buffer, stride * height );
 		}
 		if ( decklinkFrame )
