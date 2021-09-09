@@ -527,6 +527,35 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 			mlt_producer_seek(self, original + 1);
 		}
 	}
+
+	mlt_producer ref_producer = mlt_producer_cut_parent(self->list[i]->producer);
+	mlt_properties ref_props = MLT_PRODUCER_PROPERTIES(ref_producer);
+
+	for ( int j = 0; j < self->count; ++j )
+	{
+		if (j == i) {
+			continue;
+		}
+		mlt_service_lock( MLT_PRODUCER_SERVICE( self->list[ j ]->producer ) );
+		mlt_producer p = self->list[ j ]->producer;
+		if ( p )
+		{
+			mlt_service_unlock( MLT_PRODUCER_SERVICE( p ) );
+			
+			mlt_producer actual_producer = mlt_producer_cut_parent(self->list[j]->producer);
+			if (!actual_producer) {
+				continue;
+			}
+			mlt_properties props = MLT_PRODUCER_PROPERTIES(actual_producer);
+			if (
+				!strcmp(mlt_properties_get(props, "mlt_service"), "decklink") && 1
+				// !strcmp(mlt_properties_get(props, "resource"), mlt_properties_get(ref_props, "resource"))
+			) {
+				mlt_properties_set_int(props, "meta.stop-producer", 1);
+			}
+		}
+	}
+
 	return MLT_PRODUCER_SERVICE( producer );
 }
 

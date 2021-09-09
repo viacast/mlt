@@ -417,10 +417,11 @@ public:
 			mlt_properties_set_int( properties, "meta.media.colorspace", m_colorspace );
 			mlt_properties_set_int( properties, "audio_frequency", 48000 );
 			mlt_properties_set_int( properties, "audio_channels",
-			mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "channels" ) );
+				mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "channels" ) );
 		}
-		else
+		else {
 			mlt_log_warning( getProducer(), "buffer underrun\n" );
+		}
 
 		return frame;
 	}
@@ -659,6 +660,13 @@ public:
 			pthread_mutex_unlock( &m_mutex );
 		}
 
+		mlt_properties props = mlt_producer_properties(getProducer());
+
+		if (mlt_properties_get_int(props, "meta.stop-producer")) {
+			stop();
+			mlt_properties_set_int(props, "meta.stop-producer", 0);
+		}
+
 		return S_OK;
 	}
 
@@ -767,8 +775,10 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr frame, int index )
 			mlt_frame_push_get_image( *frame, get_image );
 		}
 	}
-	if ( !*frame )
+	if ( !*frame ) {
 		*frame = mlt_frame_init( MLT_PRODUCER_SERVICE(producer) );
+		mlt_properties_set_int(MLT_FRAME_PROPERTIES(*frame), "meta.skip-frame", 1);
+	}
 
 	// Calculate the next timecode
 	mlt_producer_prepare_next( producer );
