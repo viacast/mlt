@@ -597,8 +597,8 @@ mlt_producer producer_ndi_init( mlt_profile profile, mlt_service_type type, cons
 		self->a_queue = mlt_deque_init();
 		self->v_queue_limit = 30;
 		self->a_queue_limit = 30;
-		self->v_prefill_high = 1;
-		self->v_prefill_low = 1;
+		self->v_prefill_high = 20;
+		self->v_prefill_low = 5;
 
 		// Set callbacks
 		parent->close = (mlt_destructor) producer_ndi_close;
