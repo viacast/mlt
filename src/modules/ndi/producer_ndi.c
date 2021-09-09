@@ -39,6 +39,8 @@
 
 #define NDI_TIMEBASE 10000000LL
 
+static int past_first_frames = 0;
+
 typedef struct
 {
 	mlt_producer parent;
@@ -51,7 +53,6 @@ typedef struct
 	pthread_cond_t cond;
 	NDIlib_recv_instance_t recv;
 	int v_queue_limit, a_queue_limit, v_prefill_high, v_prefill_low, v_prefilled;
-	int past_first_frames;
 } producer_ndi_t;
 
 static void* producer_ndi_feeder( void* p )
@@ -496,10 +497,10 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr pframe, int index )
 			mlt_frame_push_get_image( frame, get_image );
 		} else {
 			mlt_log_warning(producer, "%s:%d: NO VIDEO\n", __FILE__, __LINE__);
-			if (self->past_first_frames > 10) {
+			if (past_first_frames > 10) {
 				mlt_properties_set_int(MLT_FRAME_PROPERTIES(frame), "meta.skip-frame", 1);
 			} else {
-				++self->past_first_frames;
+				++past_first_frames;
 			}
 		}
 
