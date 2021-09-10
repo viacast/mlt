@@ -528,6 +528,14 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 		}
 	}
 
+	snprintf(pause_prop_name, 1023, "meta.playcast.%s.loop", playcast_id);
+	int loop_clip = mlt_properties_get_int(self, pause_prop_name);
+
+	if (mlt_producer_get_speed(self) && is_last_frame && (loop_clip || !strcmp(eof, "loop-clip"))) {
+		mlt_position played_frames = mlt_producer_get_out(producer) - mlt_producer_get_in(producer);
+		mlt_producer_seek(MLT_PLAYLIST_PRODUCER(self), original - played_frames);
+	}
+
 	mlt_producer ref_producer = mlt_producer_cut_parent(self->list[i]->producer);
 	mlt_properties ref_props = MLT_PRODUCER_PROPERTIES(ref_producer);
 
