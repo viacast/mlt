@@ -87,8 +87,8 @@ typedef struct
 	SharedMemory *shared_mem_frame;
 	SharedMemory *shared_mem_audio;
 	mlt_filter audio_level;
-	int preview_width;
-	int preview_height;
+	uint32_t preview_width;
+	uint32_t preview_height;
 	uint64_t frame_count;
 }
 consumer_private;
@@ -1660,8 +1660,8 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 	}
 
 	if (frame && priv->shared_mem_frame && !(priv->frame_count++ % priv->shared_mem_frame->step) ) {
-		int width = mlt_properties_get_int(properties, "width");
-		int height = mlt_properties_get_int(properties, "height");
+		uint32_t width = mlt_properties_get_int(properties, "width");
+		uint32_t height = mlt_properties_get_int(properties, "height");
 		int bpp;
 		mlt_image_format_size(priv->image_format, width, height, &bpp);
 		uint32_t size = width*height*bpp;
@@ -1670,8 +1670,8 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 		mlt_frame_get_image(frame, &image, &priv->image_format, &width, &height, 1);
 
 		if (priv->preview_width != width || priv->preview_height != height) {
-			int owidth = priv->preview_width;
-			int oheight = priv->preview_height;
+			uint32_t owidth = priv->preview_width;
+			uint32_t oheight = priv->preview_height;
 			int interp = SWS_POINT;
 			mlt_image_format_size(priv->image_format, owidth, oheight, &bpp);
 			uint32_t out_size = owidth*oheight*bpp;
@@ -1841,8 +1841,8 @@ int mlt_consumer_stop( mlt_consumer self )
 	mlt_log( MLT_CONSUMER_SERVICE( self ), MLT_LOG_DEBUG, "stopped\n" );
 
 	if (priv->shared_mem_frame) {
-		int width = mlt_properties_get_int(properties, "width");
-		int height = mlt_properties_get_int(properties, "height");
+		uint32_t width = priv->preview_width;
+		uint32_t height = priv->preview_height;
 		int bpp;
 		mlt_image_format_size(priv->image_format, width, height, &bpp);
 		uint32_t size = width*height*bpp;
