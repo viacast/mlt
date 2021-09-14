@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     exit(-1);
   }
 
-  uint32_t width, height, size;
+  uint32_t first_width, first_height, width, height, size;
   uint8_t data[MAX_FRAME_SIZE + 3*sizeof(uint32_t)];
 
   if (!mode) {
@@ -61,8 +61,20 @@ int main(int argc, char *argv[]) {
       continue;
     }
     int read = fread(data, MAX_FRAME_SIZE + 3*sizeof(uint32_t), 1, fp);
-    memcpy(&width, data, sizeof(uint32_t));
-    memcpy(&height, data + sizeof(uint32_t), sizeof(uint32_t));
+    if (!first_width) {
+      memcpy(&first_width, data, sizeof(uint32_t));
+      memcpy(&first_height, data + sizeof(uint32_t), sizeof(uint32_t));
+      width = first_width;
+      height = first_height;
+    } else {
+      memcpy(&width, data, sizeof(uint32_t));
+      memcpy(&height, data + sizeof(uint32_t), sizeof(uint32_t));
+      if (width != first_width || height != first_height) {
+        fprintf(stderr, "width/height changed. exiting.\n");
+        exit(-1);
+      }
+    }
+
     memcpy(&size, data + 2*sizeof(uint32_t), sizeof(uint32_t));
 
     int wrote = write(fileno(stdout), data + 3*sizeof(uint32_t), size*sizeof(uint8_t));
