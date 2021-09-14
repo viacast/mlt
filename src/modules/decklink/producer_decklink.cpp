@@ -121,7 +121,7 @@ private:
 	BMDPixelFormat   m_pixel_format;
 	int              m_colorspace;
 	int              m_vancLines;
-	mlt_cache        m_cache;
+	// mlt_cache        m_cache;
 	bool             m_reprio;
 
 	BMDDisplayMode getDisplayMode( mlt_profile profile, int vancLines )
@@ -182,7 +182,7 @@ public:
 			mlt_deque_close( m_queue );
 			pthread_mutex_destroy( &m_mutex );
 			pthread_cond_destroy( &m_condition );
-			mlt_cache_close( m_cache );
+			// mlt_cache_close( m_cache );
 		}
 		SAFE_RELEASE( m_decklinkInput );
 		SAFE_RELEASE( m_decklink );
@@ -231,10 +231,10 @@ public:
 			m_started = false;
 			m_dropped = 0;
 			m_isBuffering = true;
-			m_cache = mlt_cache_init();
+			// m_cache = mlt_cache_init();
 
 			// 3 covers YADIF and increasing framerate use cases
-			mlt_cache_set_size( m_cache, 3 );
+			// mlt_cache_set_size( m_cache, 3 );
 		}
 		catch ( const char *error )
 		{
@@ -342,7 +342,8 @@ public:
 		struct timespec tm;
 		double fps = mlt_producer_get_fps( getProducer() );
 		mlt_position position = mlt_producer_position( getProducer() );
-		mlt_frame frame = mlt_cache_get_frame( m_cache, position );
+		// mlt_frame frame = mlt_cache_get_frame( m_cache, position );
+		mlt_frame frame = nullptr;
 
 		// Allow the buffer to fill to the requested initial buffer level.
 		if ( m_isBuffering )
@@ -390,7 +391,7 @@ public:
 			if ( frame )
 			{
 				mlt_frame_set_position( frame, position );
-				mlt_cache_put_frame( m_cache, frame );
+				// mlt_cache_put_frame( m_cache, frame );
 			}
 		}
 
@@ -418,8 +419,9 @@ public:
 			mlt_properties_set_int( properties, "audio_channels",
 				mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "channels" ) );
 		}
-		else
+		else {
 			mlt_log_warning( getProducer(), "buffer underrun\n" );
+		}
 
 		return frame;
 	}
@@ -658,6 +660,13 @@ public:
 			pthread_mutex_unlock( &m_mutex );
 		}
 
+		mlt_properties props = mlt_producer_properties(getProducer());
+
+		if (mlt_properties_get_int(props, "meta.stop-producer")) {
+			stop();
+			mlt_properties_set_int(props, "meta.stop-producer", 0);
+		}
+
 		return S_OK;
 	}
 
@@ -750,7 +759,7 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr frame, int index )
 	{
 		producer->child = decklink = new DeckLinkProducer();
 		decklink->setProducer( producer );
-		decklink->open(	mlt_properties_get_int( MLT_PRODUCER_PROPERTIES(producer), "resource" ) );
+		decklink->open(	mlt_properties_get_int( MLT_PRODUCER_PROPERTIES(producer), "resource-n" ) );
 	}
 
 	// Start if needed
@@ -766,8 +775,10 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr frame, int index )
 			mlt_frame_push_get_image( *frame, get_image );
 		}
 	}
-	if ( !*frame )
+	if ( !*frame ) {
 		*frame = mlt_frame_init( MLT_PRODUCER_SERVICE(producer) );
+		mlt_properties_set_int(MLT_FRAME_PROPERTIES(*frame), "meta.skip-frame", 1);
+	}
 
 	// Calculate the next timecode
 	mlt_producer_prepare_next( producer );
@@ -871,15 +882,23 @@ mlt_producer producer_decklink_init( mlt_profile profile, mlt_service_type type,
 			producer->close = (mlt_destructor) producer_close;
 			producer->get_frame = get_frame;
 
+			char fresource[32];
+			sprintf(fresource, "decklink:%s", resource);
+
 			// Set properties
-			mlt_properties_set( properties, "resource", resource );
+			mlt_properties_set( properties, "resource", fresource );
+			mlt_properties_set( properties, "resource-n", resource );
 			mlt_properties_set_int( properties, "channels", 2 );
 			mlt_properties_set_int( properties, "buffer", 25 );
 			mlt_properties_set_int( properties, "prefill", 25 );
 
+			char *e = getenv("MLT_DEFAULT_LIVE_SOURCE_LENGTH");
+			// defaults to ~24hrs at 29.97 fps
+			int p = e ? atoi( e ) : 2589411;
+
 			// These properties effectively make it infinite.
-			mlt_properties_set_int( properties, "length", INT_MAX );
-			mlt_properties_set_int( properties, "out", INT_MAX - 1 );
+			mlt_properties_set_int( properties, "length", p );
+			mlt_properties_set_int( properties, "out", p - 1 );
 			mlt_properties_set( properties, "eof", "loop" );
 
 			mlt_event event = mlt_events_listen( properties, properties, "property-changed", (mlt_listener) on_property_changed );

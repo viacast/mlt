@@ -50,7 +50,7 @@ typedef struct
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 	NDIlib_recv_instance_t recv;
-	int v_queue_limit, a_queue_limit, v_prefill;
+	int v_queue_limit, a_queue_limit, v_prefill_high, v_prefill_low, v_prefilled;
 } producer_ndi_t;
 
 static void* producer_ndi_feeder( void* p )
@@ -96,9 +96,11 @@ static void* producer_ndi_feeder( void* p )
 		// check if request present in sources list
 		ndi_srcs = NDIlib_find_get_current_sources( ndi_find, &n );
 		mlt_log_debug( MLT_PRODUCER_SERVICE( producer ), "%s: found %d sources\n", __FUNCTION__, n );
-		for ( j = 0; j < n && ndi_src_idx == -1; j++ )
-			if ( !strcmp( self->arg, ndi_srcs[j].p_ndi_name ) )
+		for ( j = 0; j < n && ndi_src_idx == -1; j++ ) {
+			if (!strcmp(self->arg, ndi_srcs[j].p_ndi_name)) {
 				ndi_src_idx = j;
+			}
+		}
 	}
 
 	// exit if nothing
@@ -341,6 +343,8 @@ static int get_image( mlt_frame frame, uint8_t **buffer, mlt_image_format *forma
 			( video->frame_format_type == NDIlib_frame_format_type_interleaved ) );
 
 		NDIlib_recv_free_video( recv, video );
+	} else {
+		return -1;
 	}
 
 	return 0;
@@ -375,22 +379,24 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr pframe, int index )
 		mlt_deque_count( self->a_queue ), mlt_deque_count( self->v_queue ));
 
 	// wait for prefill
-	if ( mlt_deque_count( self->v_queue ) < self->v_prefill )
+	if ( mlt_deque_count( self->v_queue ) < self->v_prefill_high )
 	{
 		struct timespec tm;
 
 		// Wait
 		clock_gettime(CLOCK_REALTIME, &tm);
-		tm.tv_nsec += self->v_prefill * 1000000000LL / fps;
+		tm.tv_nsec += self->v_prefill_high * 1000000000LL / fps;
 		tm.tv_sec += tm.tv_nsec / 1000000000LL;
 		tm.tv_nsec %= 1000000000LL;
 		pthread_cond_timedwait( &self->cond, &self->lock, &tm );
+	} else {
+		self->v_prefilled = 1;
 	}
 
 	// pop frame to use
-	if ( mlt_deque_count( self->v_queue ) >= self->v_prefill )
+	if ( self->v_prefilled && mlt_deque_count( self->v_queue ) >= self->v_prefill_low ) {
 		video = (NDIlib_video_frame_t*)mlt_deque_pop_front( self->v_queue );
-
+	}
 	if ( video )
 	{
 		int64_t video_timecode_out, video_dur;
@@ -487,9 +493,10 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr pframe, int index )
 		{
 			mlt_properties_set_data( p, "ndi_video", (void *)video, 0, mlt_pool_release, NULL );
 			mlt_frame_push_get_image( frame, get_image );
+		} else {
+			mlt_log_warning(producer, "%s:%d: NO VIDEO\n", __FILE__, __LINE__);
+			mlt_properties_set_int(MLT_FRAME_PROPERTIES(frame), "meta.skip-frame", 1);
 		}
-		else
-			mlt_log_error( NULL, "%s:%d: NO VIDEO\n", __FILE__, __LINE__ );
 
 		if ( audio_frame )
 		{
@@ -578,22 +585,31 @@ mlt_producer producer_ndi_init( mlt_profile profile, mlt_service_type type, cons
 		mlt_properties properties = MLT_CONSUMER_PROPERTIES( parent );
 
 		// Setup context
-		self->arg = strdup( arg );
+		self->arg = strdup( arg && strlen(arg) ? arg + 1 : arg );
 		pthread_mutex_init( &self->lock, NULL );
 		pthread_cond_init( &self->cond, NULL );
 		self->v_queue = mlt_deque_init();
 		self->a_queue = mlt_deque_init();
-		self->v_queue_limit = 6;
-		self->a_queue_limit = 6;
-		self->v_prefill = 2;
+		self->v_queue_limit = 30;
+		self->a_queue_limit = 30;
+		self->v_prefill_high = 20;
+		self->v_prefill_low = 5;
 
 		// Set callbacks
 		parent->close = (mlt_destructor) producer_ndi_close;
 		parent->get_frame = get_frame;
 
-		// These properties effectively make it infinite.
-		mlt_properties_set_int( properties, "length", INT_MAX );
-		mlt_properties_set_int( properties, "out", INT_MAX - 1 );
+		char *e = getenv("MLT_DEFAULT_LIVE_SOURCE_LENGTH");
+		// defaults to ~24hrs at 29.97 fps
+		int p = e ? atoi( e ) : 2589411;
+
+		if(self->arg) {
+			char resource[1024];
+			sprintf(resource, "ndi:%s%s", self->arg[0] != '/' ? "/" : "", self->arg);
+			mlt_properties_set(properties, "resource", resource);
+		}
+		mlt_properties_set_int( properties, "length", p );
+		mlt_properties_set_int( properties, "out", p - 1 );
 		mlt_properties_set( properties, "eof", "loop" );
 
 		return parent;

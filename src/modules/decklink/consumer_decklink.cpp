@@ -601,14 +601,14 @@ protected:
 		pthread_mutex_unlock( &m_aqueue_lock );
 	}
 
-	int create_ancillary_data(DeckLinkVideoFrame *decklink_frame, BMDPixelFormat pixel_format) 
+	int create_ancillary_data(DeckLinkVideoFrame *decklink_frame) 
 	{
 		if (!m_supports_vanc)
 			return S_FALSE;
 		int ret = S_OK;
 		IDeckLinkVideoFrameAncillary *vanc;
 		if (decklink_frame->GetAncillaryData(&vanc) == S_FALSE) {
-			ret = m_deckLinkOutput->CreateAncillaryData(bmdFormat10BitYUV, &vanc);
+			ret = m_deckLinkOutput->CreateAncillaryData(decklink_frame->GetPixelFormat(), &vanc);
 			if (ret != S_OK) {
 					mlt_log_error(getConsumer(), "Failed to create vanc\n");
 					goto exit_create_ancillary_data;
@@ -767,7 +767,6 @@ done:
 
 		scte_104.splice_event_id = ++splice_event_id;
 		scte_104.unique_program_id = unique_program_id;
-		scte_104.splice_event_id = 0;
 		scte_104.pre_roll_time = 0;
 		scte_104.brk_duration = 0;
 		scte_104.avail_num = 0;
@@ -990,8 +989,19 @@ exit_scte104:
 		{
 			uint8_t* buffer = NULL;
 			decklinkFrame->GetBytes( (void**) &buffer );
-			if ( buffer )
-				memcpy( buffer, m_buffer, stride * height );
+			if (buffer) {
+				if (m_buffer) {
+					memcpy(buffer, m_buffer, stride*height);
+				} else {
+					// black frame
+					for (int i = 0; i < stride*height; i += 2) {
+						buffer[i] = 0x80;
+						if (i + 1 < stride*height) {
+							buffer[i + 1] = 0x10;
+						}
+					}
+				}
+			}
 		}
 		if ( decklinkFrame )
 		{
@@ -1013,29 +1023,28 @@ exit_scte104:
 				decklinkFrame->SetTimecodeUserBits(bmdTimecodeVITC,
 					mlt_properties_get_int( MLT_FRAME_PROPERTIES( frame ), "meta.attr.vitc.userbits" ));
 
-			DeckLinkVideoFrame* decklink10BitFrame;
-			if (m_supports_vanc && m_decklinkVideoConversion && decklinkFrame->GetPixelFormat() != bmdFormat10BitYUV) {
-				if ( S_OK == m_deckLinkOutput->CreateVideoFrame( m_width, m_height,
-					((m_width + 47)/48) * 128, bmdFormat10BitYUV, bmdFrameFlagDefault, (IDeckLinkMutableVideoFrame **) &decklink10BitFrame ) && decklink10BitFrame )
-				{
-					int convert_result = m_decklinkVideoConversion->ConvertFrame(decklinkFrame, decklink10BitFrame);
-					mlt_log_debug(getConsumer(), "%s:%d: ConvertFrame %d\n", __FUNCTION__, __LINE__, convert_result);
-					if (convert_result != S_OK) {
-						decklink10BitFrame = nullptr;
-					} else {
-						if (create_ancillary_data(decklink10BitFrame, bmdFormat10BitYUV) == S_OK) {
-							construct_vanc_cc(frame, decklink10BitFrame);
-							construct_scte_104(frame, decklink10BitFrame);
+			if (mlt_properties_get_int(consumer_properties, "use_frame_conversion")) {
+				DeckLinkVideoFrame* decklink10BitFrame;
+				if (m_supports_vanc && m_decklinkVideoConversion && decklinkFrame->GetPixelFormat() != bmdFormat10BitYUV) {
+					if ( S_OK == m_deckLinkOutput->CreateVideoFrame( m_width, m_height,
+						((m_width + 47)/48) * 128, bmdFormat10BitYUV, bmdFrameFlagDefault, (IDeckLinkMutableVideoFrame **) &decklink10BitFrame ) && decklink10BitFrame )
+					{
+						int convert_result = m_decklinkVideoConversion->ConvertFrame(decklinkFrame, decklink10BitFrame);
+						mlt_log_debug(getConsumer(), "%s:%d: ConvertFrame %d\n", __FUNCTION__, __LINE__, convert_result);
+						if (convert_result != S_OK) {
+							decklink10BitFrame = nullptr;
+						} else {
+							if (create_ancillary_data(decklink10BitFrame) == S_OK) {
+								construct_vanc_cc(frame, decklink10BitFrame);
+								construct_scte_104(frame, decklink10BitFrame);
+							}
+							hr = m_deckLinkOutput->ScheduleVideoFrame( decklink10BitFrame, m_count * m_duration, m_duration, m_timescale );
+							decklink10BitFrame->Release();
 						}
+					} else {
+						mlt_log_error(getConsumer(), "%s:%d: CreateVideoFrame failed\n", __FUNCTION__, __LINE__);
 					}
-				} else {
-					mlt_log_error(getConsumer(), "%s:%d: CreateVideoFrame failed\n", __FUNCTION__, __LINE__);
 				}
-			}
-
-			if (decklink10BitFrame) {
-				hr = m_deckLinkOutput->ScheduleVideoFrame( decklink10BitFrame, m_count * m_duration, m_duration, m_timescale );
-				decklink10BitFrame->Release();
 			} else {
 				hr = m_deckLinkOutput->ScheduleVideoFrame( decklinkFrame, m_count * m_duration, m_duration, m_timescale );
 			}
@@ -1220,6 +1229,10 @@ exit_scte104:
 	virtual HRESULT STDMETHODCALLTYPE ScheduledFrameCompleted( IDeckLinkVideoFrame* completedFrame, BMDOutputFrameCompletionResult completed )
 	{
 		mlt_log_debug( getConsumer(), "%s: ENTERING\n", __FUNCTION__ );
+		// int preroll = mlt_properties_get_int(MLT_CONSUMER_PROPERTIES(getConsumer()), "preroll");
+		// if (mlt_deque_count(m_frames) != preroll) {
+		// 	mlt_log_warning( getConsumer(), "frames in queue different from set preroll (%d != %d)\n", mlt_deque_count(m_frames), preroll);
+		// }
 
 		// mlt_deque_push_back(m_frames, completedFrame);
 		if (void *frame = mlt_deque_pop_front(m_frames_interim))

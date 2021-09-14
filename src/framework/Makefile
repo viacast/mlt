@@ -95,7 +95,7 @@ endif
 
 CFLAGS += $(RDYNAMIC) -DPREFIX_DATA="\"$(mltdatadir)\"" -DPREFIX_LIB="\"$(moduledir)\""
 
-LDFLAGS += $(LIBDL) -lpthread -lm -lrt -lavutil
+LDFLAGS += $(LIBDL) -lpthread -lm -lrt -lavutil -lavformat -lswscale
 
 all:	$(TARGET)
 
