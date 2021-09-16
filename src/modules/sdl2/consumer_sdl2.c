@@ -58,6 +58,8 @@ struct consumer_sdl_s
 	pthread_cond_t video_cond;
 	int window_width;
 	int window_height;
+	int window_position_x;
+	int window_position_y;
 	int previous_width;
 	int previous_height;
 	int width;
@@ -139,7 +141,7 @@ mlt_consumer consumer_sdl2_init( mlt_profile profile, mlt_service_type type, con
 		self->joined = 1;
 		
 		// process actual param
-		if ( arg && sscanf( arg, "%dx%d", &self->width, &self->height ) )
+		if ( arg && sscanf( arg, "%dx%d+%d+%d", &self->width, &self->height, &self->window_position_x, &self->window_position_y ) )
 		{
 			mlt_properties_set_int( self->properties, "resolution", 1 );
 		}
@@ -553,7 +555,7 @@ static int setup_sdl_video( consumer_sdl self )
 	}
 
 	pthread_mutex_lock( &mlt_sdl_mutex );
-	self->sdl_window = SDL_CreateWindow("MLT", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+	self->sdl_window = SDL_CreateWindow("MLT", self->window_position_x, self->window_position_y,
 		self->window_width, self->window_height, sdl_flags);
 	self->sdl_renderer = SDL_CreateRenderer(self->sdl_window, -1, SDL_RENDERER_ACCELERATED);
 	if ( self->sdl_renderer )
