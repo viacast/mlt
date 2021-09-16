@@ -716,6 +716,11 @@ static void *video_thread( void *arg )
 	// Get real time flag
 	int real_time = mlt_properties_get_int( self->properties, "real_time" );
 
+	#if !defined(__APPLE__) && !defined(_WIN32)
+	if ( setup_sdl_video(self) )
+		self->running = 0;
+	#endif
+
 	// Determine start time
 	gettimeofday( &now, NULL );
 	start = ( int64_t )now.tv_sec * 1000000 + now.tv_usec;
