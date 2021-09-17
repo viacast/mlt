@@ -1636,17 +1636,6 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 			mlt_properties_set_data( MLT_FRAME_PROPERTIES( frame ), "consumer", self, 0, NULL, NULL );
 		}
 	}
-	char *loudness_prop = mlt_properties_get(properties, "target_loudness");
-	if (!audio_off && loudness_prop && strlen(loudness_prop)) {
-		if (!priv->loudness) {
-			priv->loudness = mlt_factory_filter( priv->profile, "dynamic_loudness", NULL );
-		}
-		double loudness = mlt_properties_get_double(properties, "target_loudness");
-		if (priv->loudness && (loudness != 0 || !strcmp(loudness_prop, "0"))) {
-			mlt_properties_set_double(MLT_FILTER_PROPERTIES(priv->loudness), "target_loudness", loudness);
-			priv->loudness->process(priv->loudness, frame);
-		}
-	}
 
 	if (!priv->shared_mem_frame) {
 		priv->preview_width = mlt_properties_get_int(properties, "preview_width");
@@ -1777,6 +1766,18 @@ skip_frame_preview:
 
 		if (write_shared_memory(priv->shared_mem_audio, (void *)audio_samples, sizeof(audio_samples[0])*(priv->channels + 1))) {
 			mlt_log_warning(NULL, "failed to write to shared memory\n");
+		}
+	}
+	
+	char *loudness_prop = mlt_properties_get(properties, "target_loudness");
+	if (!audio_off && loudness_prop && strlen(loudness_prop)) {
+		if (!priv->loudness) {
+			priv->loudness = mlt_factory_filter( priv->profile, "dynamic_loudness", NULL );
+		}
+		double loudness = mlt_properties_get_double(properties, "target_loudness");
+		if (priv->loudness && (loudness != 0 || !strcmp(loudness_prop, "0"))) {
+			mlt_properties_set_double(MLT_FILTER_PROPERTIES(priv->loudness), "target_loudness", loudness);
+			priv->loudness->process(priv->loudness, frame);
 		}
 	}
 
