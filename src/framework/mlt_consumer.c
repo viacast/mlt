@@ -91,6 +91,7 @@ typedef struct
 	uint32_t preview_width;
 	uint32_t preview_height;
 	uint64_t frame_count;
+	mlt_profile profile;
 }
 consumer_private;
 
@@ -123,7 +124,6 @@ int mlt_consumer_init( mlt_consumer self, void *child, mlt_profile profile )
 	memset( self, 0, sizeof( struct mlt_consumer_s ) );
 	self->child = child;
 	consumer_private *priv = self->local = calloc( 1, sizeof( consumer_private ) );
-
 	error = mlt_service_init( &self->parent, self );
 	if ( error == 0 )
 	{
@@ -162,6 +162,7 @@ int mlt_consumer_init( mlt_consumer self, void *child, mlt_profile profile )
 		// Hmm - default all consumers to yuv422 with s16 :-/
 		priv->image_format = mlt_image_yuv422;
 		priv->audio_format = mlt_audio_s16;
+		priv->profile = profile;
 
 		mlt_events_register( properties, "consumer-frame-show", ( mlt_transmitter )mlt_consumer_frame_show );
 		mlt_events_register( properties, "consumer-frame-render", ( mlt_transmitter )mlt_consumer_frame_render );
@@ -1638,7 +1639,7 @@ mlt_frame mlt_consumer_rt_frame( mlt_consumer self )
 	char *loudness_prop = mlt_properties_get(properties, "target_loudness");
 	if (!audio_off && loudness_prop && strlen(loudness_prop)) {
 		if (!priv->loudness) {
-			priv->loudness = mlt_factory_filter( NULL, "dynamic_loudness", NULL );
+			priv->loudness = mlt_factory_filter( priv->profile, "dynamic_loudness", NULL );
 		}
 		double loudness = mlt_properties_get_double(properties, "target_loudness");
 		if (priv->loudness && (loudness != 0 || !strcmp(loudness_prop, "0"))) {
