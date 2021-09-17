@@ -290,13 +290,13 @@ static int load_consumer( mlt_consumer *consumer, mlt_profile profile, int argc,
 		// Seee if we need the qglsl variant of multi consumer.
 		if ( !strncmp( argv[i], "glsl.", 5 ) || !strncmp( argv[i], "movit.", 6 ) )
 			qglsl = 1;
-#if SDL_MAJOR_VERSION == 2
-		if ( !strcmp("sdl", argv[i]) || !strcmp("sdl_audio", argv[i]) || !strcmp("sdl_preview", argv[i]) || !strcmp("sdl_still", argv[i]) ) {
-			fprintf(stderr, 
-"Error: This program was linked against SDL2, which is incompatible with\nSDL1 consumers. Aborting.\n");
-			return EXIT_FAILURE;
-		}
-#endif
+// #if SDL_MAJOR_VERSION == 2
+// 		if ( !strcmp("sdl", argv[i]) || !strcmp("sdl_audio", argv[i]) || !strcmp("sdl_preview", argv[i]) || !strcmp("sdl_still", argv[i]) ) {
+// 			fprintf(stderr, 
+// "Error: This program was linked against SDL2, which is incompatible with\nSDL1 consumers. Aborting.\n");
+// 			return EXIT_FAILURE;
+// 		}
+// #endif
 	}
 	// Disable qglsl if xgl is being used!
 	for ( i = 1; qglsl && i < argc; i ++ )
