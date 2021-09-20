@@ -51,6 +51,7 @@ typedef struct
 	pthread_cond_t cond;
 	NDIlib_recv_instance_t recv;
 	int v_queue_limit, a_queue_limit, v_prefill_high, v_prefill_low, v_prefilled;
+	mlt_position last_position;
 } producer_ndi_t;
 
 static void* producer_ndi_feeder( void* p )
@@ -239,12 +240,36 @@ static void* producer_ndi_feeder( void* p )
 					"%s: NDIlib_recv_capture failed\n", __FUNCTION__ );
 				break;
 		}
+
+		if (mlt_properties_get_int(MLT_PRODUCER_PROPERTIES(producer), "meta.stop-producer")) {
+			fprintf(stderr, "stop %s\n", mlt_properties_get(MLT_PRODUCER_PROPERTIES(producer), "resource"));
+			self->f_exit = 1;
+			self->v_prefilled = 0;
+			while( mlt_deque_count( self->a_queue ) )
+			{
+				NDIlib_audio_frame_interleaved_16s_t* audio = (NDIlib_audio_frame_interleaved_16s_t*)mlt_deque_pop_front( self->a_queue );
+				mlt_pool_release( audio->p_data );
+				mlt_pool_release( audio );
+			}
+
+			// dequeue video frames
+			while( mlt_deque_count( self->v_queue ) )
+			{
+				NDIlib_video_frame_t* video = (NDIlib_video_frame_t*)mlt_deque_pop_front( self->v_queue );
+				NDIlib_recv_free_video( self->recv, video );
+				mlt_pool_release( video );
+			}
+			NDIlib_recv_destroy( self->recv );
+
+			mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(producer), "meta.stop-producer", 0);
+		}
 	}
 
 	if ( video )
 		mlt_pool_release( video );
 
 	mlt_log_debug( MLT_PRODUCER_SERVICE(producer), "%s: exiting\n", __FUNCTION__ );
+	self->f_running = 0;
 
 	return NULL;
 }
@@ -364,7 +389,7 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr pframe, int index )
 	mlt_log_debug( NULL, "%s:%d: entering %s\n", __FILE__, __LINE__, __FUNCTION__ );
 
 	// run thread
-	if ( !self->f_running )
+	if ( !self->f_running && !mlt_properties_get_int(MLT_PRODUCER_PROPERTIES(producer), "meta.stop-producer") )
 	{
 		// set flags
 		self->f_exit = 0;
@@ -493,13 +518,17 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr pframe, int index )
 
 		mlt_properties_set_data( p, "ndi_recv", (void *)self->recv, 0, NULL, NULL );
 
-		if ( video )
+		if ( video && position != self->last_position )
 		{
 			mlt_properties_set_data( p, "ndi_video", (void *)video, 0, mlt_pool_release, NULL );
 			mlt_frame_push_get_image( frame, get_image );
+			self->last_position = position;
 		} else {
-			mlt_log_warning(producer, "%s:%d: NO VIDEO\n", __FILE__, __LINE__);
+			mlt_log_info(producer, "%s:%d: NO VIDEO\n", __FILE__, __LINE__);
 			mlt_properties_set_int(MLT_FRAME_PROPERTIES(frame), "meta.skip-frame", 1);
+			if (video) {
+				NDIlib_recv_free_video(self->recv, video);
+			}
 		}
 
 		if ( audio_frame )
@@ -598,6 +627,7 @@ mlt_producer producer_ndi_init( mlt_profile profile, mlt_service_type type, cons
 		self->a_queue_limit = 30;
 		self->v_prefill_high = 20;
 		self->v_prefill_low = 5;
+		self->last_position = -1;
 
 		// Set callbacks
 		parent->close = (mlt_destructor) producer_ndi_close;
