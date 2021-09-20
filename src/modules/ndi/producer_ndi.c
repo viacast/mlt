@@ -378,18 +378,22 @@ static int get_frame( mlt_producer producer, mlt_frame_ptr pframe, int index )
 	mlt_log_debug( NULL, "%s:%d: audio_cnt=%d, video_cnt=%d\n", __FILE__, __LINE__,
 		mlt_deque_count( self->a_queue ), mlt_deque_count( self->v_queue ));
 
-	// wait for prefill
-	if ( mlt_deque_count( self->v_queue ) < self->v_prefill_high )
-	{
-		struct timespec tm;
+	// // wait for prefill
+	// if ( mlt_deque_count( self->v_queue ) < self->v_prefill_high )
+	// {
+	// 	struct timespec tm;
 
-		// Wait
-		clock_gettime(CLOCK_REALTIME, &tm);
-		tm.tv_nsec += self->v_prefill_high * 1000000000LL / fps;
-		tm.tv_sec += tm.tv_nsec / 1000000000LL;
-		tm.tv_nsec %= 1000000000LL;
-		pthread_cond_timedwait( &self->cond, &self->lock, &tm );
-	} else {
+	// 	// Wait
+	// 	clock_gettime(CLOCK_REALTIME, &tm);
+	// 	tm.tv_nsec += self->v_prefill_high * 1000000000LL / fps;
+	// 	tm.tv_sec += tm.tv_nsec / 1000000000LL;
+	// 	tm.tv_nsec %= 1000000000LL;
+	// 	pthread_cond_timedwait( &self->cond, &self->lock, &tm );
+	// } else {
+	// 	self->v_prefilled = 1;
+	// }
+
+	if ( mlt_deque_count( self->v_queue ) >= self->v_prefill_high ) {
 		self->v_prefilled = 1;
 	}
 

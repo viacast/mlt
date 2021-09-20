@@ -368,36 +368,37 @@ public:
 			pthread_mutex_unlock( &m_mutex );
 		}
 
-		if ( !frame )
-		{
-			// Wait if queue is empty
-			pthread_mutex_lock( &m_mutex );
-			while ( mlt_deque_count( m_queue ) < 1 )
-			{
-				// Wait up to twice frame duration
-				gettimeofday( &now, NULL );
-				long usec = now.tv_sec * 1000000 + now.tv_usec;
-				usec += 2000000 / fps;
-				tm.tv_sec = usec / 1000000;
-				tm.tv_nsec = (usec % 1000000) * 1000;
-				if ( pthread_cond_timedwait( &m_condition, &m_mutex, &tm ) )
-					// Stop waiting if error (timed out)
-					break;
-			}
-			frame = ( mlt_frame ) mlt_deque_pop_front( m_queue );
-			pthread_mutex_unlock( &m_mutex );
+		// if ( !frame )
+		// {
+		// 	// Wait if queue is empty
+		// 	pthread_mutex_lock( &m_mutex );
+		// 	while ( mlt_deque_count( m_queue ) < 1 )
+		// 	{
+		// 		// Wait up to twice frame duration
+		// 		gettimeofday( &now, NULL );
+		// 		long usec = now.tv_sec * 1000000 + now.tv_usec;
+		// 		usec += 2000000 / fps;
+		// 		tm.tv_sec = usec / 1000000;
+		// 		tm.tv_nsec = (usec % 1000000) * 1000;
+		// 		if ( pthread_cond_timedwait( &m_condition, &m_mutex, &tm ) )
+		// 			// Stop waiting if error (timed out)
+		// 			break;
+		// 	}
+		// 	frame = ( mlt_frame ) mlt_deque_pop_front( m_queue );
+		// 	pthread_mutex_unlock( &m_mutex );
 
-			// add to cache
-			if ( frame )
-			{
-				mlt_frame_set_position( frame, position );
-				// mlt_cache_put_frame( m_cache, frame );
-			}
-		}
+		// 	// add to cache
+		// 	if ( frame )
+		// 	{
+		// 		mlt_frame_set_position( frame, position );
+		// 		// mlt_cache_put_frame( m_cache, frame );
+		// 	}
+		// }
 
 		// Set frame timestamp and properties
 		if ( frame )
 		{
+			mlt_frame_set_position( frame, position );
 			mlt_profile profile = mlt_service_profile( MLT_PRODUCER_SERVICE( getProducer() ) );
 			mlt_properties properties = MLT_FRAME_PROPERTIES( frame );
 			mlt_properties_set_int( properties, "progressive", profile->progressive );
