@@ -542,25 +542,29 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 
 		for ( int j = 0; j < self->count; ++j )
 		{
-			if (j == i) {
+			mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(self->list[j]->producer)), "multitrack", NULL);
+			if (!multitrack || !multitrack->list || !multitrack->count) {
 				continue;
 			}
-			mlt_service_lock( MLT_PRODUCER_SERVICE( self->list[ j ]->producer ) );
-			mlt_producer p = self->list[ j ]->producer;
-			if ( p )
-			{
-				mlt_service_unlock( MLT_PRODUCER_SERVICE( p ) );
-				
-				mlt_producer actual_producer = mlt_producer_cut_parent(self->list[j]->producer);
+			mlt_track track = multitrack->list[0];
+			if (!track || !track->producer) {
+				continue;
+			}
+			mlt_playlist playlist2 = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(track->producer), "playlist", NULL);
+			if (!playlist2) {
+				continue;
+			}
+			for (int k = 0; k < playlist2->count; ++k) {
+				mlt_producer actual_producer = mlt_producer_cut_parent(playlist2->list[k]->producer);
 				if (!actual_producer) {
 					continue;
 				}
 				mlt_properties props = MLT_PRODUCER_PROPERTIES(actual_producer);
 				if (
-					!strcmp(mlt_properties_get(props, "mlt_service"), "decklink") && 1
+					(!strcmp(mlt_properties_get(props, "mlt_service"), "decklink") || !strcmp(mlt_properties_get(props, "mlt_service"), "ndi")) && 1
 					// !strcmp(mlt_properties_get(props, "resource"), mlt_properties_get(ref_props, "resource"))
 				) {
-					mlt_properties_set_int(props, "meta.stop-producer", 1);
+					mlt_properties_set_int(props, "meta.stop-producer", j != i);
 				}
 			}
 		}
