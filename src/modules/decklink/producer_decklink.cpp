@@ -123,6 +123,7 @@ private:
 	int              m_vancLines;
 	// mlt_cache        m_cache;
 	bool             m_reprio;
+	mlt_position     m_last_position;
 
 	BMDDisplayMode getDisplayMode( mlt_profile profile, int vancLines )
 	{
@@ -343,30 +344,36 @@ public:
 		double fps = mlt_producer_get_fps( getProducer() );
 		mlt_position position = mlt_producer_position( getProducer() );
 		// mlt_frame frame = mlt_cache_get_frame( m_cache, position );
-		mlt_frame frame = nullptr;
 
-		// Allow the buffer to fill to the requested initial buffer level.
-		if ( m_isBuffering )
-		{
-			int prefill = mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "prefill" );
-			int buffer = mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "buffer" );
+		mlt_frame frame = (mlt_frame)mlt_deque_pop_front(m_queue);
 
-			m_isBuffering = false;
-			prefill = prefill > buffer ? buffer : prefill;
-			pthread_mutex_lock( &m_mutex );
-			while ( mlt_deque_count( m_queue ) < prefill )
-			{
-				// Wait up to buffer/fps seconds
-				gettimeofday( &now, NULL );
-				long usec = now.tv_sec * 1000000 + now.tv_usec;
-				usec += 1000000 * buffer / fps;
-				tm.tv_sec = usec / 1000000;
-				tm.tv_nsec = (usec % 1000000) * 1000;
-				if ( pthread_cond_timedwait( &m_condition, &m_mutex, &tm ) )
-					break;
-			}
-			pthread_mutex_unlock( &m_mutex );
+		if (position == m_last_position) {
+			mlt_frame_close(frame);
+			return nullptr;
 		}
+
+		// // Allow the buffer to fill to the requested initial buffer level.
+		// if ( m_isBuffering )
+		// {
+		// 	int prefill = mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "prefill" );
+		// 	int buffer = mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "buffer" );
+
+		// 	m_isBuffering = false;
+		// 	prefill = prefill > buffer ? buffer : prefill;
+		// 	pthread_mutex_lock( &m_mutex );
+		// 	while ( mlt_deque_count( m_queue ) < prefill )
+		// 	{
+		// 		// Wait up to buffer/fps seconds
+		// 		gettimeofday( &now, NULL );
+		// 		long usec = now.tv_sec * 1000000 + now.tv_usec;
+		// 		usec += 1000000 * buffer / fps;
+		// 		tm.tv_sec = usec / 1000000;
+		// 		tm.tv_nsec = (usec % 1000000) * 1000;
+		// 		if ( pthread_cond_timedwait( &m_condition, &m_mutex, &tm ) )
+		// 			break;
+		// 	}
+		// 	pthread_mutex_unlock( &m_mutex );
+		// }
 
 		// if ( !frame )
 		// {
@@ -398,6 +405,7 @@ public:
 		// Set frame timestamp and properties
 		if ( frame )
 		{
+			m_last_position = position;
 			mlt_frame_set_position( frame, position );
 			mlt_profile profile = mlt_service_profile( MLT_PRODUCER_SERVICE( getProducer() ) );
 			mlt_properties properties = MLT_FRAME_PROPERTIES( frame );
@@ -421,7 +429,7 @@ public:
 				mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "channels" ) );
 		}
 		else {
-			mlt_log_warning( getProducer(), "buffer underrun\n" );
+			mlt_log_info( getProducer(), "buffer underrun\n" );
 		}
 
 		return frame;
@@ -656,7 +664,7 @@ public:
 			{
 				mlt_frame_close( frame );
 				mlt_properties_set_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "dropped", ++m_dropped );
-				mlt_log_warning( getProducer(), "buffer overrun, frame dropped %d\n", m_dropped );
+				mlt_log_info( getProducer(), "buffer overrun, frame dropped %d\n", m_dropped );
 			}
 			pthread_mutex_unlock( &m_mutex );
 		}
