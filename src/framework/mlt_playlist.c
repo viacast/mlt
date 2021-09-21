@@ -537,9 +537,6 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 	}
 
 	if (total) {
-		mlt_producer ref_producer = mlt_producer_cut_parent(self->list[i]->producer);
-		mlt_properties ref_props = MLT_PRODUCER_PROPERTIES(ref_producer);
-
 		for ( int j = 0; j < self->count; ++j )
 		{
 			mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(self->list[j]->producer)), "multitrack", NULL);
@@ -561,8 +558,7 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 				}
 				mlt_properties props = MLT_PRODUCER_PROPERTIES(actual_producer);
 				if (
-					(!strcmp(mlt_properties_get(props, "mlt_service"), "decklink") || !strcmp(mlt_properties_get(props, "mlt_service"), "ndi")) && 1
-					// !strcmp(mlt_properties_get(props, "resource"), mlt_properties_get(ref_props, "resource"))
+					!strcmp(mlt_properties_get(props, "mlt_service"), "decklink") || !strcmp(mlt_properties_get(props, "mlt_service"), "ndi")
 				) {
 					mlt_properties_set_int(props, "meta.stop-producer", j != i);
 				}
