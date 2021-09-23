@@ -242,7 +242,7 @@ static void* producer_ndi_feeder( void* p )
 		}
 
 		if (mlt_properties_get_int(MLT_PRODUCER_PROPERTIES(producer), "meta.stop-producer")) {
-			fprintf(stderr, "stop %s\n", mlt_properties_get(MLT_PRODUCER_PROPERTIES(producer), "resource"));
+			// fprintf(stderr, "stop %s\n", mlt_properties_get(MLT_PRODUCER_PROPERTIES(producer), "resource"));
 			self->f_exit = 1;
 			self->v_prefilled = 0;
 			while( mlt_deque_count( self->a_queue ) )
