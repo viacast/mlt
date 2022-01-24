@@ -55,6 +55,20 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 	// Get the old resource
 	char *old_resource = mlt_properties_get( properties, "_old_resource" );
 
+	char *geometry = mlt_properties_get( properties, "wm-geometry" );
+
+	int in = -1, out = -1;
+
+	char *wm_in = mlt_properties_get( properties, "wm-in" );
+	if (wm_in && strlen(wm_in)) {
+		in = mlt_properties_get_int( properties, "wm-in" );
+	}
+
+	char *wm_out = mlt_properties_get( properties, "wm-out" );
+	if (wm_out && strlen(wm_out)) {
+		out = mlt_properties_get_int( properties, "wm-out" );
+	}
+
 	// Create a composite if we don't have one
 	if ( composite == NULL )
 	{
@@ -143,6 +157,178 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		// Resetting position to appease the composite transition
 		mlt_frame_set_position( a_frame, position );
 
+		int producer_position = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "_position");
+		int producer_in = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "in");
+		int producer_out = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "out");
+
+		int transitioning_in = 0;
+		int transitioning_out = 0;
+
+		if (in != -1 && producer_position < MAX(in, producer_in)) {
+			goto skip;
+		}
+
+		if (out != -1 && producer_position > MIN(out, producer_out)) {
+			goto skip;
+		}
+
+		mlt_properties composite_properties = MLT_TRANSITION_PROPERTIES( composite );
+
+		char *target_geometry = mlt_properties_get(properties, "geometry");
+		char *current_geometry = mlt_properties_get(composite_properties, "geometry");
+
+		char *transition_in_type = mlt_properties_get( properties, "transition-in.type" );
+		int transition_in_length = mlt_properties_get_int( properties, "transition-in.length" );
+
+		char *transition_out_type = mlt_properties_get( properties, "transition-out.type" );
+		int transition_out_length = mlt_properties_get_int( properties, "transition-out.length" );
+		
+		transitioning_in = position - in <= transition_in_length;
+		transitioning_out = !transitioning_in && (out - position <= transition_out_length);
+
+		if (position == in && (!transition_in_length || !transition_in_type || !strlen(transition_in_type))) {
+			mlt_properties_set(composite_properties, "geometry", target_geometry);
+			goto skip_transition;
+		}
+
+		int current_x = 0, current_y = 0;
+		int target_x = 0, target_y = 0;
+		
+		if (target_geometry && strlen(target_geometry)) {
+			sscanf(target_geometry, "%d/%d", &target_x, &target_y);
+		}
+
+		if (current_geometry && strlen(current_geometry)) {
+			sscanf(current_geometry, "%d/%d", &current_x, &current_y);
+		}
+
+		if (!transitioning_in && !transitioning_out) {
+			goto skip_transition;
+		}
+
+		if (transitioning_in && !transition_in_type) {
+			goto skip_transition;
+		}
+
+		if (transitioning_out && !transition_out_type) {
+			goto skip_transition;
+		}
+
+		int original_x = 0, original_y = 0;
+		int fx = 0, fy = 0;
+		int dx = 0, dy = 0;
+		int transition_length;
+
+		if (transitioning_in) {
+			transition_length = transition_in_length;
+			if (!strcmp(transition_in_type, "up")) {
+				original_x = target_x;
+				original_y = target_y + (*height);
+				if (!current_geometry || !strlen(current_geometry)) {
+					current_x = original_x;
+					current_y = original_y;
+				}
+				fx = 0;
+				fy = current_y <= target_y ? 0 : -1;
+				current_y = MAX(target_y, current_y);
+			}
+			if (!strcmp(transition_in_type, "down")) {
+				original_x = target_x;
+				original_y = target_y - (*height);
+				if (!current_geometry || !strlen(current_geometry)) {
+					current_x = original_x;
+					current_y = original_y;
+				}
+				fx = 0;
+				fy = current_y >= target_y ? 0 : 1;
+				current_y = MIN(target_y, current_y);
+			}
+			if (!strcmp(transition_in_type, "left")) {
+				original_x = target_x + (*width);
+				original_y = target_y;
+				if (!current_geometry || !strlen(current_geometry)) {
+					current_x = original_x;
+					current_y = original_y;
+				}
+				fx = current_x <= target_x ? 0 : -1;
+				fy = 0;
+				current_x = MAX(target_x, current_x);
+			}
+			if (!strcmp(transition_in_type, "right")) {
+				original_x = target_x - (*width);
+				original_y = target_y;
+				if (!current_geometry || !strlen(current_geometry)) {
+					current_x = original_x;
+					current_y = original_y;
+				}
+				fx = current_x >= target_x ? 0 : 1;
+				fy = 0;
+				current_x = MIN(target_x, current_x);
+			}
+		}
+
+		if (transitioning_out) {
+			transition_length = transition_out_length;
+			if (!strcmp(transition_out_type, "up")) {
+				original_x = target_x;
+				original_y = target_y;
+				target_y -= *height;
+				fx = 0;
+				fy = current_y <= target_y ? 0 : -1;
+				current_y = MAX(target_y, current_y);
+			}
+			if (!strcmp(transition_out_type, "down")) {
+				original_x = target_x;
+				original_y = target_y;
+				target_y += *height;
+				fx = 0;
+				fy = current_y >= target_y ? 0 : 1;
+				current_y = MIN(target_y, current_y);
+			}
+			if (!strcmp(transition_out_type, "left")) {
+				original_x = target_x;
+				original_y = target_y;
+				target_x -= *width;
+				fx = current_x <= target_x ? 0 : -1;
+				fy = 0;
+				current_x = MAX(target_x, current_x);
+			}
+			if (!strcmp(transition_out_type, "right")) {
+				original_x = target_x;
+				original_y = target_y;
+				target_x += (*width);
+				fx = current_x >= target_x ? 0 : 1;
+				fy = 0;
+				current_x = MIN(target_x, current_x);
+			}
+		}
+
+		if (!transition_length) {
+			mlt_properties_set(composite_properties, "geometry", target_geometry);
+			goto skip_transition;
+		}
+
+		if (fx) {
+			dx = fx * abs(original_x - target_x) / transition_length;
+			if (!dx) {
+				dx = fx;
+			}
+		}
+
+		if (fy) {
+			dy = fy * abs(original_y - target_y) / transition_length;
+			if (!dy) {
+				dy = fy;
+			}
+		}
+
+		char new_geometry[32];
+		snprintf(new_geometry, 31, "%d/%d:%s", current_x + dx, current_y + dy, "100%x100%");
+
+		mlt_properties_set(composite_properties, "geometry", new_geometry);
+
+skip_transition:
+
 		// Get the b frame and process with composite if successful
 		if ( mlt_service_get_frame( service, &b_frame, 0 ) == 0 )
 		{
@@ -209,10 +395,12 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 			}
 		}
 
+skip:
 		// Close the temporary frames
 		mlt_frame_close( a_frame );
 		mlt_frame_close( b_frame );
 	}
+
 
 	return error;
 }
