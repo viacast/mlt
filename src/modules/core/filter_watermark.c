@@ -218,10 +218,12 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		int fx = 0, fy = 0;
 		int dx = 0, dy = 0;
 		int transition_length;
+		int valid_type = 0;
 
 		if (transitioning_in) {
 			transition_length = transition_in_length;
 			if (!strcmp(transition_in_type, "up")) {
+				valid_type = 1;
 				original_x = target_x;
 				original_y = target_y + (*height);
 				if (!current_geometry || !strlen(current_geometry)) {
@@ -233,6 +235,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 				current_y = MAX(target_y, current_y);
 			}
 			if (!strcmp(transition_in_type, "down")) {
+				valid_type = 1;
 				original_x = target_x;
 				original_y = target_y - (*height);
 				if (!current_geometry || !strlen(current_geometry)) {
@@ -244,6 +247,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 				current_y = MIN(target_y, current_y);
 			}
 			if (!strcmp(transition_in_type, "left")) {
+				valid_type = 1;
 				original_x = target_x + (*width);
 				original_y = target_y;
 				if (!current_geometry || !strlen(current_geometry)) {
@@ -255,6 +259,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 				current_x = MAX(target_x, current_x);
 			}
 			if (!strcmp(transition_in_type, "right")) {
+				valid_type = 1;
 				original_x = target_x - (*width);
 				original_y = target_y;
 				if (!current_geometry || !strlen(current_geometry)) {
@@ -270,6 +275,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		if (transitioning_out) {
 			transition_length = transition_out_length;
 			if (!strcmp(transition_out_type, "up")) {
+				valid_type = 1;
 				original_x = target_x;
 				original_y = target_y;
 				target_y -= *height;
@@ -278,6 +284,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 				current_y = MAX(target_y, current_y);
 			}
 			if (!strcmp(transition_out_type, "down")) {
+				valid_type = 1;
 				original_x = target_x;
 				original_y = target_y;
 				target_y += *height;
@@ -286,6 +293,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 				current_y = MIN(target_y, current_y);
 			}
 			if (!strcmp(transition_out_type, "left")) {
+				valid_type = 1;
 				original_x = target_x;
 				original_y = target_y;
 				target_x -= *width;
@@ -294,6 +302,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 				current_x = MAX(target_x, current_x);
 			}
 			if (!strcmp(transition_out_type, "right")) {
+				valid_type = 1;
 				original_x = target_x;
 				original_y = target_y;
 				target_x += (*width);
@@ -303,7 +312,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 			}
 		}
 
-		if (!transition_length) {
+		if (!valid_type || !transition_length) {
 			mlt_properties_set(composite_properties, "geometry", target_geometry);
 			goto skip_transition;
 		}
@@ -340,6 +349,30 @@ skip_transition:
 			// Set the b frame to be in the same position and have same consumer requirements
 			mlt_frame_set_position( b_frame, position );
 			mlt_properties_set_int( b_props, "consumer_deinterlace", mlt_properties_get_int( a_props, "consumer_deinterlace" ) || mlt_properties_get_int( properties, "deinterlace" ) );
+
+			int fade = 0;
+			double dalpha = 0;
+
+			if (transitioning_in && !strcmp(transition_in_type, "fade") && transition_in_length) {
+				fade = 1;
+				dalpha = 1.0/(double)transition_in_length;
+			}
+
+			if (transitioning_out && !strcmp(transition_out_type, "fade") && transition_out_length) {
+				fade = 1;
+				dalpha = -1.0/(double)transition_out_length;
+			}
+
+			if (fade) {
+				double current_alpha = mlt_properties_get_double(properties, "wm-alpha");
+				double new_alpha = MAX(0, MIN(1, current_alpha + dalpha));
+				mlt_properties_set_double(properties, "wm-alpha", new_alpha);
+				mlt_filter brightness = mlt_factory_filter( NULL, "brightness", NULL );
+				if (brightness) {
+					mlt_properties_set_double(mlt_filter_properties(brightness), "alpha", new_alpha);
+					brightness->process(brightness, b_frame);
+				}
+			}
 
 			// Check for the special case - no aspect ratio means no problem :-)
 			if ( mlt_frame_get_aspect_ratio( b_frame ) == 0 )
