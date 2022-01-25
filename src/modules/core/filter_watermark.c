@@ -55,8 +55,6 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 	// Get the old resource
 	char *old_resource = mlt_properties_get( properties, "_old_resource" );
 
-	char *geometry = mlt_properties_get( properties, "wm-geometry" );
-
 	int in = -1, out = -1;
 
 	char *wm_in = mlt_properties_get( properties, "wm-in" );
@@ -161,14 +159,17 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		int producer_in = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "in");
 		int producer_out = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "out");
 
+		in = in == -1 ? producer_in : MAX(in, producer_in);
+		out = out == -1 ? producer_out : MIN(out, producer_out);
+
 		int transitioning_in = 0;
 		int transitioning_out = 0;
 
-		if (in != -1 && producer_position < MAX(in, producer_in)) {
+		if (producer_position < in) {
 			goto skip;
 		}
 
-		if (out != -1 && producer_position > MIN(out, producer_out)) {
+		if (producer_position > out) {
 			goto skip;
 		}
 
@@ -178,15 +179,18 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		char *current_geometry = mlt_properties_get(composite_properties, "geometry");
 
 		char *transition_in_type = mlt_properties_get( properties, "transition-in.type" );
-		int transition_in_length = mlt_properties_get_int( properties, "transition-in.length" );
+		int transition_in_length = MAX(1, mlt_properties_get_int( properties, "transition-in.length" ));
 
 		char *transition_out_type = mlt_properties_get( properties, "transition-out.type" );
-		int transition_out_length = mlt_properties_get_int( properties, "transition-out.length" );
-		
+		int transition_out_length = MAX(1, mlt_properties_get_int( properties, "transition-out.length" ));
+
 		transitioning_in = position - in <= transition_in_length;
 		transitioning_out = !transitioning_in && (out - position <= transition_out_length);
 
-		if (position == in && (!transition_in_length || !transition_in_type || !strlen(transition_in_type))) {
+		int post_transition_in = position >= in + transition_in_length;
+		int pre_transition_out = position <= out - transition_out_length;
+
+		if (post_transition_in && pre_transition_out) {
 			mlt_properties_set(composite_properties, "geometry", target_geometry);
 			goto skip_transition;
 		}
@@ -353,12 +357,16 @@ skip_transition:
 			int fade = 0;
 			double dalpha = 0;
 
-			if (transitioning_in && !strcmp(transition_in_type, "fade") && transition_in_length) {
+			if (transitioning_in && transition_in_type && !strcmp(transition_in_type, "fade") && transition_in_length) {
 				fade = 1;
 				dalpha = 1.0/(double)transition_in_length;
 			}
 
-			if (transitioning_out && !strcmp(transition_out_type, "fade") && transition_out_length) {
+			if (transitioning_out && transition_out_type && !strcmp(transition_out_type, "fade") && transition_out_length) {
+				double current_alpha = mlt_properties_get_double(properties, "wm-alpha");
+				if (!current_alpha) {
+					mlt_properties_set_double(properties, "wm-alpha", 1.0);
+				}
 				fade = 1;
 				dalpha = -1.0/(double)transition_out_length;
 			}
