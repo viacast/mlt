@@ -846,24 +846,18 @@ skip_run_sh:;
 		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.length", watermark_id);
 		int watermark_transition_out_length = mlt_properties_get_int(frame_properties, watermark_prop_name);
 
-		int watermark_in = -1, watermark_out = -1;
+		int watermark_transition_in_point = -1, watermark_transition_out_point = -1;
 
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.in", watermark_id);
+		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-in.point", watermark_id);
 		char *wm_in = mlt_properties_get(frame_properties, watermark_prop_name);
 		if (wm_in && strlen(wm_in)){
-			watermark_in = mlt_properties_get_int(frame_properties, watermark_prop_name);
+			watermark_transition_in_point = mlt_properties_get_int(frame_properties, watermark_prop_name);
 		}
 
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.out", watermark_id);
+		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.point", watermark_id);
 		char *wm_out = mlt_properties_get(frame_properties, watermark_prop_name);
 		if (wm_out && strlen(wm_out)){
-			watermark_out = mlt_properties_get_int(frame_properties, watermark_prop_name);
-		}
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.length", watermark_id);
-		char *wm_transition_out_length = mlt_properties_get(frame_properties, watermark_prop_name);
-		if (wm_transition_out_length && strlen(wm_transition_out_length)){
-			watermark_transition_out_length = mlt_properties_get_int(frame_properties, watermark_prop_name);
+			watermark_transition_out_point = mlt_properties_get_int(frame_properties, watermark_prop_name);
 		}
 
 		if (!watermark_target_in || !strlen(watermark_target_in)) {
@@ -932,14 +926,14 @@ skip_run_sh:;
 					mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
 					mlt_properties_set(wm_properties, "resource", watermark_filepath);
 					if (is_target_in) {
-						mlt_properties_set_int(wm_properties, "wm-in", watermark_in);
+						mlt_properties_set_int(wm_properties, "transition-in.point", watermark_transition_in_point);
 						mlt_properties_set(wm_properties, "transition-in.type", watermark_transition_in_type);
 						mlt_properties_set_int(wm_properties, "transition-in.length", watermark_transition_in_length);
 					}
 					if (is_target_out) {
+						mlt_properties_set_int(wm_properties, "transition-out.point", watermark_transition_out_point);
 						mlt_properties_set(wm_properties, "transition-out.type", watermark_transition_out_type);
 						mlt_properties_set_int(wm_properties, "transition-out.length", watermark_transition_out_length);
-						mlt_properties_set_int(wm_properties, "wm-out", watermark_out);
 					}
 					if (watermark_geometry && strlen(watermark_geometry)) {
 						mlt_properties_set(wm_properties, "geometry", watermark_geometry);

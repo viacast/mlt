@@ -55,18 +55,6 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 	// Get the old resource
 	char *old_resource = mlt_properties_get( properties, "_old_resource" );
 
-	int in = -1, out = -1;
-
-	char *wm_in = mlt_properties_get( properties, "wm-in" );
-	if (wm_in && strlen(wm_in)) {
-		in = mlt_properties_get_int( properties, "wm-in" );
-	}
-
-	char *wm_out = mlt_properties_get( properties, "wm-out" );
-	if (wm_out && strlen(wm_out)) {
-		out = mlt_properties_get_int( properties, "wm-out" );
-	}
-
 	// Create a composite if we don't have one
 	if ( composite == NULL )
 	{
@@ -155,24 +143,6 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		// Resetting position to appease the composite transition
 		mlt_frame_set_position( a_frame, position );
 
-		int producer_position = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "_position");
-		int producer_in = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "in");
-		int producer_out = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "out");
-
-		in = in == -1 ? producer_in : MAX(in, producer_in);
-		out = out == -1 ? producer_out : MIN(out, producer_out);
-
-		int transitioning_in = 0;
-		int transitioning_out = 0;
-
-		if (producer_position < in) {
-			goto skip;
-		}
-
-		if (producer_position > out) {
-			goto skip;
-		}
-
 		mlt_properties composite_properties = MLT_TRANSITION_PROPERTIES( composite );
 
 		char *target_geometry = mlt_properties_get(properties, "geometry");
@@ -183,12 +153,42 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 
 		char *transition_out_type = mlt_properties_get( properties, "transition-out.type" );
 		int transition_out_length = MAX(1, mlt_properties_get_int( properties, "transition-out.length" ));
+		
+		int transition_in_point = -1, transition_out_point = -1;
 
-		transitioning_in = position - in <= transition_in_length;
-		transitioning_out = !transitioning_in && (out - position <= transition_out_length);
+		char *wm_in = mlt_properties_get( properties, "transition-in.point" );
+		if (wm_in && strlen(wm_in)) {
+			transition_in_point = mlt_properties_get_int( properties, "transition-in.point" );
+		}
 
-		int post_transition_in = position >= in + transition_in_length;
-		int pre_transition_out = position <= out - transition_out_length;
+		char *wm_out = mlt_properties_get( properties, "transition-out.point" );
+		if (wm_out && strlen(wm_out)) {
+			transition_out_point = mlt_properties_get_int( properties, "transition-out.point" );
+		}
+
+		int producer_position = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "_position");
+		int producer_in = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "in");
+		int producer_out = mlt_properties_get_int(MLT_FRAME_PROPERTIES(a_frame), "out");
+
+		transition_in_point = transition_in_point == -1 ? producer_in : MAX(transition_in_point, producer_in);
+		transition_out_point = transition_out_point == -1 ? producer_out : MIN(transition_out_point, producer_out);
+
+		int transitioning_in = 0;
+		int transitioning_out = 0;
+
+		if (producer_position < transition_in_point) {
+			goto skip;
+		}
+
+		if (producer_position > transition_out_point) {
+			goto skip;
+		}
+
+		transitioning_in = position - transition_in_point <= transition_in_length;
+		transitioning_out = !transitioning_in && (transition_out_point - position <= transition_out_length);
+
+		int post_transition_in = position >= transition_in_point + transition_in_length;
+		int pre_transition_out = position <= transition_out_point - transition_out_length;
 
 		if (post_transition_in && pre_transition_out) {
 			mlt_properties_set(composite_properties, "geometry", target_geometry);
