@@ -177,10 +177,14 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		int transitioning_out = 0;
 
 		if (producer_position < transition_in_point) {
+			mlt_properties_set(composite_properties, "geometry", "");
+			mlt_properties_set_double(properties, "wm-alpha", 0);
 			goto skip;
 		}
 
 		if (producer_position > transition_out_point) {
+			mlt_properties_set(composite_properties, "geometry", "");
+			mlt_properties_set_double(properties, "wm-alpha", 0);
 			goto skip;
 		}
 

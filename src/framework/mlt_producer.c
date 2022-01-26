@@ -905,45 +905,46 @@ skip_run_sh:;
 					in_watermark_block = 1;
 				}
 
-				if (!in_watermark_block) {
+				snprintf(watermark_prop_name, 1023, "watermark-%s", watermark_id);
+				if (!in_watermark_block || strcmp(avproducer_playcast_id, playcast_id)) {
+					mlt_filter watermark = mlt_properties_get_data(avproperties, watermark_prop_name, NULL);
+					if (watermark) {
+						mlt_producer_detach(avproducer, watermark);
+					}
+					mlt_properties_set_data(avproperties, watermark_prop_name, NULL, 0, (mlt_destructor)mlt_filter_close, NULL);
+					if (is_target_out) {
+						in_watermark_block = 0;
+					}
 					continue;
 				}
-			
-				snprintf(watermark_prop_name, 1023, "watermark-%s", watermark_id);
 
-				if (strcmp(avproducer_playcast_id, playcast_id)) {
-					mlt_filter watermark = mlt_properties_get_data(avproperties, watermark_prop_name, NULL);
-					mlt_producer_detach(avproducer, watermark);
-					mlt_properties_set_data(avproperties, watermark_prop_name, NULL, 0, (mlt_destructor)mlt_filter_close, NULL);
+				mlt_filter watermark = mlt_properties_get_data(avproperties, watermark_prop_name, NULL);
+				if(!watermark) {
+					mlt_profile profile = mlt_service_profile(MLT_PRODUCER_SERVICE(avproducer));
+					watermark = mlt_factory_filter(profile, "watermark", NULL);
+					mlt_properties_set_data(avproperties, watermark_prop_name, watermark, 0, (mlt_destructor)mlt_filter_close, NULL);
+					mlt_producer_attach(avproducer, watermark);
+				}
+				mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
+				mlt_properties_set(wm_properties, "resource", watermark_filepath);
+				if (is_target_in) {
+					mlt_properties_set_int(wm_properties, "transition-in.point", watermark_transition_in_point);
+					mlt_properties_set(wm_properties, "transition-in.type", watermark_transition_in_type);
+					mlt_properties_set_int(wm_properties, "transition-in.length", watermark_transition_in_length);
+				}
+				if (is_target_out) {
+					mlt_properties_set_int(wm_properties, "transition-out.point", watermark_transition_out_point);
+					mlt_properties_set(wm_properties, "transition-out.type", watermark_transition_out_type);
+					mlt_properties_set_int(wm_properties, "transition-out.length", watermark_transition_out_length);
+				}
+				if (watermark_geometry && strlen(watermark_geometry)) {
+					mlt_properties_set(wm_properties, "geometry", watermark_geometry);
 				} else {
-					mlt_filter watermark = mlt_properties_get_data(avproperties, watermark_prop_name, NULL);
-					if(!watermark) {
-						mlt_profile profile = mlt_service_profile(MLT_PRODUCER_SERVICE(avproducer));
-						watermark = mlt_factory_filter(profile, "watermark", NULL);
-						mlt_properties_set_data(avproperties, watermark_prop_name, watermark, 0, (mlt_destructor)mlt_filter_close, NULL);
-						mlt_producer_attach(avproducer, watermark);
-					}
-					mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
-					mlt_properties_set(wm_properties, "resource", watermark_filepath);
-					if (is_target_in) {
-						mlt_properties_set_int(wm_properties, "transition-in.point", watermark_transition_in_point);
-						mlt_properties_set(wm_properties, "transition-in.type", watermark_transition_in_type);
-						mlt_properties_set_int(wm_properties, "transition-in.length", watermark_transition_in_length);
-					}
-					if (is_target_out) {
-						mlt_properties_set_int(wm_properties, "transition-out.point", watermark_transition_out_point);
-						mlt_properties_set(wm_properties, "transition-out.type", watermark_transition_out_type);
-						mlt_properties_set_int(wm_properties, "transition-out.length", watermark_transition_out_length);
-					}
-					if (watermark_geometry && strlen(watermark_geometry)) {
-						mlt_properties_set(wm_properties, "geometry", watermark_geometry);
-					} else {
-						mlt_properties_set(wm_properties, "geometry", "0/0:100%x100%");
-					}
+					mlt_properties_set(wm_properties, "geometry", "0/0:100%x100%");
 				}
 
 				if (is_target_out) {
-					goto next_watermark;
+					in_watermark_block = 0;
 				}
 			}
 		}
