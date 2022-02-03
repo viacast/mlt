@@ -145,6 +145,7 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 
 		mlt_properties composite_properties = MLT_TRANSITION_PROPERTIES( composite );
 
+		int loop = mlt_properties_get_int(properties, "loop");
 		char *target_geometry = mlt_properties_get(properties, "geometry");
 		char *current_geometry = mlt_properties_get(composite_properties, "geometry");
 
@@ -176,16 +177,23 @@ static int filter_get_image( mlt_frame frame, uint8_t **image, mlt_image_format 
 		int transitioning_in = 0;
 		int transitioning_out = 0;
 
-		if (producer_position < transition_in_point) {
-			mlt_properties_set(composite_properties, "geometry", "");
-			mlt_properties_set_double(properties, "wm-alpha", 0);
-			goto skip;
-		}
-
-		if (producer_position > transition_out_point) {
-			mlt_properties_set(composite_properties, "geometry", "");
-			mlt_properties_set_double(properties, "wm-alpha", 0);
-			goto skip;
+		while (1) {
+			if (transition_in_point >= producer_out || producer_position < transition_in_point) {
+				mlt_properties_set(composite_properties, "geometry", "");
+				mlt_properties_set_double(properties, "wm-alpha", 0);
+				goto skip;
+			}
+			if (producer_position > transition_out_point) {
+				if (loop) {
+					transition_in_point += loop;
+					transition_out_point += loop;
+					continue;
+				}
+				mlt_properties_set(composite_properties, "geometry", "");
+				mlt_properties_set_double(properties, "wm-alpha", 0);
+				goto skip;
+			}
+			break;
 		}
 
 		transitioning_in = position - transition_in_point <= transition_in_length;

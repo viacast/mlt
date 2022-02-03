@@ -846,6 +846,9 @@ skip_run_sh:;
 		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.length", watermark_id);
 		int watermark_transition_out_length = mlt_properties_get_int(frame_properties, watermark_prop_name);
 
+		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.loop", watermark_id);
+		int watermark_loop = mlt_properties_get_int(frame_properties, watermark_prop_name);
+
 		int watermark_transition_in_point = -1, watermark_transition_out_point = -1;
 
 		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-in.point", watermark_id);
@@ -927,6 +930,7 @@ skip_run_sh:;
 				}
 				mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
 				mlt_properties_set(wm_properties, "resource", watermark_filepath);
+				mlt_properties_set_int(wm_properties, "loop", watermark_loop);
 				if (is_target_in) {
 					mlt_properties_set_int(wm_properties, "transition-in.point", watermark_transition_in_point);
 					mlt_properties_set(wm_properties, "transition-in.type", watermark_transition_in_type);
