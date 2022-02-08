@@ -387,11 +387,14 @@ skip_transition:
 				double current_alpha = mlt_properties_get_double(properties, "wm-alpha");
 				double new_alpha = MAX(0, MIN(1, current_alpha + dalpha));
 				mlt_properties_set_double(properties, "wm-alpha", new_alpha);
-				mlt_filter brightness = mlt_factory_filter( NULL, "brightness", NULL );
+				mlt_filter brightness = mlt_properties_get_data(properties, "brightness-filter", 0);
+				if (!brightness) {
+					brightness = mlt_factory_filter( NULL, "brightness", NULL );
+				}
 				if (brightness) {
 					mlt_properties_set_double(mlt_filter_properties(brightness), "alpha", new_alpha);
 					brightness->process(brightness, b_frame);
-					mlt_filter_close(brightness);
+					mlt_properties_set_data(properties, "brightness-filter", brightness, 0, (mlt_destructor)mlt_filter_close, NULL);
 				}
 			}
 
