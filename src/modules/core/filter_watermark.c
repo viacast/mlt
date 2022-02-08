@@ -391,6 +391,7 @@ skip_transition:
 				if (brightness) {
 					mlt_properties_set_double(mlt_filter_properties(brightness), "alpha", new_alpha);
 					brightness->process(brightness, b_frame);
+					mlt_filter_close(brightness);
 				}
 			}
 
