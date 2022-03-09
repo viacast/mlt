@@ -81,6 +81,8 @@ struct mlt_property_s
 
 	pthread_mutex_t mutex;
 	mlt_animation animation;
+
+	int deleted;
 };
 
 /** Construct a property and initialize it
@@ -160,6 +162,36 @@ int mlt_property_is_clear( mlt_property self )
 	{
 		pthread_mutex_lock( &self->mutex );
 		result = self->types == 0 && self->animation == NULL;
+		pthread_mutex_unlock( &self->mutex );
+	}
+	return result;
+}
+
+/** Marks a property for deletion.
+ *
+ * \public \memberof mlt_property_s
+ * \param self a property
+ */
+
+void mlt_property_delete( mlt_property self )
+{
+	pthread_mutex_lock( &self->mutex );
+	self->deleted = 1;
+	pthread_mutex_unlock( &self->mutex );
+}
+
+/** Marks a property for deletion.
+ *
+ * \public \memberof mlt_property_s
+ * \param self a property
+ */
+
+int mlt_property_is_deleted( mlt_property self )
+{
+	int result = 1;
+	if (self) {
+		pthread_mutex_lock( &self->mutex );
+		result = self->deleted;
 		pthread_mutex_unlock( &self->mutex );
 	}
 	return result;

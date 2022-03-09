@@ -557,6 +557,7 @@ MLT_6.22.0 {
   global:
     mlt_property_is_clear;
     mlt_properties_exists;
+    mlt_properties_delete;
     mlt_audio_new;
     mlt_audio_close;
     mlt_audio_set_values;

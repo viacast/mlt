@@ -44,6 +44,8 @@
 #include <locale.h>
 #include <float.h>
 
+#define PROPERTY_LIST_DELETED_COUNT_LIMIT 1
+
 /** \brief private implementation of the property list */
 
 typedef struct
@@ -53,6 +55,7 @@ typedef struct
 	mlt_property *value;
 	int count;
 	int size;
+	int deleted_count;
 	mlt_properties mirror;
 	int ref_count;
 	pthread_mutex_t mutex;
@@ -2730,6 +2733,53 @@ int mlt_properties_from_utf8( mlt_properties properties, const char *name_from, 
 	// However, for file open operations on Windows, especially when processing XML, a text codec
 	// dependency is hardly avoidable.
 	return mlt_properties_set_string( properties, name_to, mlt_properties_get( properties, name_from ) );
+}
+
+/** Deletes an existing property.
+ *
+ * \private \memberof mlt_properties_s
+ * \param self a properties list
+ * \param name the name of the property to be deleted
+ * \return true if error
+ */
+
+int mlt_properties_delete( mlt_properties self, const char *name )
+{
+	property_list *list = self->local;
+	mlt_property property = mlt_properties_find( self, name );
+
+	if (property == NULL) {
+		return 0;
+	}
+
+	mlt_properties_lock( self );
+
+	mlt_property_delete(property);
+	list->deleted_count++;
+
+	if (list->deleted_count >= PROPERTY_LIST_DELETED_COUNT_LIMIT) {
+		int new_count = 0;
+		for (int i = 0; i < list->count; i ++) {
+			mlt_property property = list->value[i];
+			if (mlt_property_is_deleted(property)) {
+				free(list->name[i]);
+				mlt_property_close(property);
+				continue;
+			}
+			list->value[new_count] = list->value[i];
+			list->name[new_count] = list->name[i];
+			++new_count;
+		}
+		list->count = new_count;
+		list->deleted_count = 0;
+	}
+
+	mlt_properties_unlock( self );
+	return 0;
+}
+
+void mlt_properties_test() {
+	return;
 }
 
 #endif
