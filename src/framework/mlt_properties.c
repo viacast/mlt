@@ -536,6 +536,10 @@ static inline mlt_property mlt_properties_find( mlt_properties self, const char 
 	}
 	mlt_properties_unlock( self );
 
+	if (mlt_property_is_deleted(value)) {
+		return NULL;
+	}
+
 	return value;
 }
 
