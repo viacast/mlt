@@ -2768,6 +2768,7 @@ int mlt_properties_delete( mlt_properties self, const char *name )
 			}
 			list->value[new_count] = list->value[i];
 			list->name[new_count] = list->name[i];
+			list->hash[generate_hash(name)] = new_count + 1;
 			++new_count;
 		}
 		list->count = new_count;
