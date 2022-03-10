@@ -44,7 +44,7 @@
 #include <locale.h>
 #include <float.h>
 
-#define PROPERTY_LIST_DELETED_COUNT_LIMIT 1
+#define PROPERTY_LIST_DELETED_COUNT_LIMIT 50
 
 /** \brief private implementation of the property list */
 
