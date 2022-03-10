@@ -2760,15 +2760,18 @@ int mlt_properties_delete( mlt_properties self, const char *name )
 	if (list->deleted_count >= PROPERTY_LIST_DELETED_COUNT_LIMIT) {
 		int new_count = 0;
 		for (int i = 0; i < list->count; i ++) {
+			int hash = generate_hash(name);
 			mlt_property property = list->value[i];
 			if (mlt_property_is_deleted(property)) {
 				free(list->name[i]);
+				list->name[i] = NULL;
+				list->hash[hash] = 0;
 				mlt_property_close(property);
 				continue;
 			}
 			list->value[new_count] = list->value[i];
 			list->name[new_count] = list->name[i];
-			list->hash[generate_hash(name)] = new_count + 1;
+			list->hash[hash] = new_count + 1;
 			++new_count;
 		}
 		list->count = new_count;
