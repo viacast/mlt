@@ -44,7 +44,7 @@ typedef char* locale_t;
 extern mlt_property mlt_property_init( );
 extern void mlt_property_clear( mlt_property self );
 extern int mlt_property_is_clear( mlt_property self );
-extern void mlt_property_delete( mlt_property self );
+extern void mlt_property_set_deleted( mlt_property self, int deleted );
 extern int mlt_property_is_deleted( mlt_property self );
 extern int mlt_property_set_int( mlt_property self, int value );
 extern int mlt_property_set_double( mlt_property self, double value );

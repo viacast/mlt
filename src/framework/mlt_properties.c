@@ -512,7 +512,7 @@ int mlt_properties_pass( mlt_properties self, mlt_properties that, const char *p
  * \return the property or NULL for failure
  */
 
-static inline mlt_property mlt_properties_find( mlt_properties self, const char *name )
+static inline mlt_property mlt_properties_find_ignore( mlt_properties self, const char *name, int ignore_deleted )
 {
 	if ( !self || !name ) return NULL;
 	property_list *list = self->local;
@@ -536,11 +536,15 @@ static inline mlt_property mlt_properties_find( mlt_properties self, const char 
 	}
 	mlt_properties_unlock( self );
 
-	if (mlt_property_is_deleted(value)) {
+	if (!ignore_deleted && mlt_property_is_deleted(value)) {
 		return NULL;
 	}
 
 	return value;
+}
+
+static inline mlt_property mlt_properties_find( mlt_properties self, const char *name ) {
+	return mlt_properties_find_ignore(self, name, 0);
 }
 
 /** Add a new property.
@@ -594,11 +598,14 @@ static mlt_property mlt_properties_add( mlt_properties self, const char *name )
 static mlt_property mlt_properties_fetch( mlt_properties self, const char *name )
 {
 	// Try to find an existing property first
-	mlt_property property = mlt_properties_find( self, name );
+	mlt_property property = mlt_properties_find_ignore( self, name, 1 );
 
 	// If it wasn't found, create one
-	if ( property == NULL )
+	if ( property == NULL ) {
 		property = mlt_properties_add( self, name );
+	} else {
+		mlt_property_set_deleted(property, 0);
+	}
 
 	// Return the property
 	return property;
@@ -2758,7 +2765,7 @@ int mlt_properties_delete( mlt_properties self, const char *name )
 
 	mlt_properties_lock( self );
 
-	mlt_property_delete(property);
+	mlt_property_set_deleted(property, 1);
 	list->deleted_count++;
 
 	if (list->deleted_count >= PROPERTY_LIST_DELETED_COUNT_LIMIT) {

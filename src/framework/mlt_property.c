@@ -173,10 +173,10 @@ int mlt_property_is_clear( mlt_property self )
  * \param self a property
  */
 
-void mlt_property_delete( mlt_property self )
+void mlt_property_set_deleted( mlt_property self, int deleted )
 {
 	pthread_mutex_lock( &self->mutex );
-	self->deleted = 1;
+	self->deleted = deleted;
 	pthread_mutex_unlock( &self->mutex );
 }
 
