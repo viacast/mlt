@@ -15,7 +15,7 @@
 ################################################################################
 
 # These are all of the configuration variables with defaults
-INSTALL_DIR="$HOME/melted"
+INSTALL_DIR=`pwd`
 AUTO_APPEND_DATE=1
 SOURCE_DIR="$INSTALL_DIR/src"
 ACTION_GET_COMPILE_INSTALL=1
@@ -24,36 +24,20 @@ ACTION_COMPILE_INSTALL=0
 SOURCES_CLEAN=1
 INSTALL_AS_ROOT=0
 CREATE_STARTUP_SCRIPT=1
-RUGEN_HEAD=1
-RUGEN_REVISION=
-MELTED_HEAD=1
-MELTED_REVISION=
 ENABLE_FREI0R=1
-FREI0R_HEAD=1
-FREI0R_REVISION=
-ENABLE_SWFDEC=0
-SWFDEC_HEAD=1
-SWFDEC_REVISION=
-X264_HEAD=1
-X264_REVISION=
-LIBVPX_HEAD=1
-LIBVPX_REVISION=
 ENABLE_LAME=1
-FFMPEG_HEAD=1
-FFMPEG_REVISION=
 FFMPEG_SUPPORT_H264=1
 FFMPEG_SUPPORT_LIBVPX=1
 FFMPEG_SUPPORT_THEORA=1
 FFMPEG_SUPPORT_MP3=1
 FFMPEG_SUPPORT_FAAC=0
 FFMPEG_ADDITIONAL_OPTIONS=
-MLT_HEAD=1
-MLT_REVISION=
-# QT_INCLUDE_DIR="$(pkg-config --variable=prefix QtCore)/include"
-QT_INCLUDE_DIR=
-# QT_LIB_DIR="$(pkg-config --variable=prefix QtCore)/lib"
-QT_LIB_DIR=
 MLT_DISABLE_SOX=0
+QT_INCLUDE_DIR=$HOME/dev/qt-everywhere-build-5.15.1/include
+QT_LIB_DIR=$HOME/dev/qt-everywhere-build-5.15.1/lib
+BMD_SDK_INCLUDE_DIR=$HOME/dev/bmd-sdk-12.2.2/include
+NDI_INCLUDE_DIR=$HOME/dev/ndi-sdk-4/include
+NDI_LIB_DIR=$HOME/dev/ndi-sdk-4/lib
 
 ################################################################################
 # Location of config file - if not overriden on command line
@@ -313,14 +297,14 @@ function set_globals {
 
   # REPOLOCS Array holds the repo urls
   REPOLOCS[0]="https://github.com/gabrieljablonski/FFmpeg.git"
-  REPOLOCS[1]="https://github.com/gabrieljablonski/mlt.git"
-  REPOLOCS[2]="https://github.com/gabrieljablonski/melted.git"
-  REPOLOCS[3]="https://github.com/gabrieljablonski/frei0r.git"
-  REPOLOCS[4]="https://github.com/gabrieljablonski/x264.git"
-  REPOLOCS[5]="https://github.com/gabrieljablonski/libvpx.git"
-  REPOLOCS[6]="git://github.com/mltframework/rugen.git"
-  REPOLOCS[7]="git://github.com/mltframework/swfdec.git"
-  REPOLOCS[8]="https://ftp.osuosl.org/pub/blfs/conglomeration/lame/lame-3.99.5.tar.gz"
+  REPOLOCS[1]="https://github.com/viacast/mlt.git"
+  REPOLOCS[2]="https://github.com/viacast/melted.git"
+  REPOLOCS[3]="https://github.com/viacast/frei0r.git"
+  REPOLOCS[4]="https://github.com/viacast/x264.git"
+  REPOLOCS[5]="https://github.com/viacast/libvpx.git"
+  REPOLOCS[6]="https://github.com/mltframework/rugen.git"
+  REPOLOCS[7]="https://github.com/mltframework/swfdec.git"
+  REPOLOCS[8]="https://github.com/viacast/lame.git"
 
   # REPOTYPE Array holds the repo types. (Yes, this might be redundant, but easy for me)
   REPOTYPES[0]="git"
@@ -331,42 +315,17 @@ function set_globals {
   REPOTYPES[5]="git"
   REPOTYPES[6]="git"
   REPOTYPES[7]="git"
-  REPOTYPES[8]="http-tgz"
+  REPOTYPES[8]="git"
 
   # And, set up the revisions
-  REVISIONS[0]=""
-  if test 0 = "$FFMPEG_HEAD" -a "$FFMPEG_REVISION" ; then
-    REVISIONS[0]="$FFMPEG_REVISION"
-  fi 
-  # Git, just use blank or the hash.
-  REVISIONS[1]="playcast-latest"
-  # if test 0 = "$MLT_HEAD" -a "$MLT_REVISION" ; then
-  #   REVISIONS[1]="$MLT_REVISION"
-  # fi
-  REVISIONS[2]="playcast-latest"
-  # if test 0 = "$MELTED_HEAD" -a "$MELTED_REVISION" ; then
-  #   REVISIONS[2]="$MELTED_REVISION"
-  # fi
-  REVISIONS[3]="playcast-latest"
-  # if test 0 = "$FREI0R_HEAD" -a "$FREI0R_REVISION" ; then
-  #   REVISIONS[3]="$FREI0R_REVISION"
-  # fi
-  REVISIONS[4]="playcast-latest"
-  # if test 0 = "$X264_HEAD" -a "$X264_REVISION" ; then
-  #   REVISIONS[4]="$X264_REVISION"
-  # fi
-  REVISIONS[5]="playcast-latest"
-  # if test 0 = "$LIBVPX_HEAD" -a "$LIBVPX_REVISION" ; then
-  #   REVISIONS[5]="$LIBVPX_REVISION"
-  # fi
-  REVISIONS[6]=""
-  if test 0 = "$RUGEN_HEAD" -a "$RUGEN_REVISION" ; then
-    REVISIONS[6]="$RUGEN_REVISION"
-  fi
-  REVISIONS[7]=""
-  if test 0 = "$SWFDEC_HEAD" -a "$SWFDEC_REVISION" ; then
-    REVISIONS[7]="$SWFDEC_REVISION"
-  fi
+  REVISIONS[0]="playcast-v1.x"
+  REVISIONS[1]="playcast-v1.x"
+  REVISIONS[2]="playcast-v1.x"
+  REVISIONS[3]="playcast-v1.x"
+  REVISIONS[4]="playcast-v1.x"
+  REVISIONS[5]="playcast-v1.x"
+  REVISIONS[6]="master"
+  REVISIONS[7]="master"
   REVISIONS[8]="lame-3.99.5"
 
   # Figure out the install dir - we may not install, but then we know it.
@@ -414,12 +373,12 @@ function set_globals {
   fi
   # Add optional parameters
   CONFIG[0]="${CONFIG[0]} $FFMPEG_ADDITIONAL_OPTIONS"
-  CFLAGS_[0]="-I$FINAL_INSTALL_DIR/include -I$HOME/ffmpeg_sources/BMD_SDK/include -std=gnu++11 -std=gnu99 $CFLAGS"
+  CFLAGS_[0]="-I$FINAL_INSTALL_DIR/include -I$BMD_SDK_INCLUDE_DIR -std=gnu++11 -std=gnu99 $CFLAGS"
   LDFLAGS_[0]="-L$FINAL_INSTALL_DIR/lib $LDFLAGS"
   # export PKG_CONFIG_PATH=/opt/intel/mediasdk/lib/pkgconfig/
   #####
   # mlt
-  CONFIG[1]="./configure --prefix=$FINAL_INSTALL_DIR --enable-gpl --enable-linsys --swig-languages=python --ndi-sdk-lib=/root/ndi3/lib/x86_64-linux-gnu --ndi-sdk-include=/root/ndi3/include"
+  CONFIG[1]="./configure --prefix=$FINAL_INSTALL_DIR --enable-gpl --enable-linsys --swig-languages=python --ndi-sdk-lib=$NDI_LIB_DIR --ndi-sdk-include=$NDI_INCLUDE_DIR"
   # Remember, if adding more of these, to update the post-configure check.
   [ "$TARGET_OS" = "Darwin" ] && CONFIG[1]="${CONFIG[1]} --disable-jackrack"
   [ "$QT_INCLUDE_DIR" ] && CONFIG[1]="${CONFIG[1]} --qt-includedir=$QT_INCLUDE_DIR"
@@ -427,7 +386,7 @@ function set_globals {
   if test "1" = "$MLT_DISABLE_SOX" ; then
     CONFIG[1]="${CONFIG[1]} --disable-sox"
   fi
-  CFLAGS_[1]="-I$FINAL_INSTALL_DIR/include -std=gnu++11 -std=gnu99 $CFLAGS"
+  CFLAGS_[1]="-I$FINAL_INSTALL_DIR/include -std=c++11 -std=gnu99 $CFLAGS"
   # Temporary patch until makefile for MLT corrected?
   #CFLAGS_[1]="${CFLAGS_[1]} -I$FINAL_INSTALL_DIR/include/libavcodec/ -I$FINAL_INSTALL_DIR/include/libavformat/ -I$FINAL_INSTALL_DIR/include/libswscale/ -I$FINAL_INSTALL_DIR/include/libavdevice"
   LDFLAGS_[1]="-L$FINAL_INSTALL_DIR/lib $LDFLAGS"
@@ -436,10 +395,10 @@ function set_globals {
 
   #####
   # melted
-  CONFIG[2]="./configure --prefix=$FINAL_INSTALL_DIR --enable-gpl"
-  CFLAGS_[2]="-I$FINAL_INSTALL_DIR/include -std=gnu++11 -std=gnu99 $CFLAGS"
-  LDFLAGS_[2]="-L$FINAL_INSTALL_DIR/lib $LDFLAGS"
-  
+  CONFIG[2]="./configure --prefix=$FINAL_INSTALL_DIR --enable-gpl --ndi-sdk-lib=$NDI_LIB_DIR --ndi-sdk-include=$NDI_INCLUDE_DIR"
+  CFLAGS_[2]="-I$FINAL_INSTALL_DIR/include -I$NDI_INCLUDE_DIR -std=gnu++11 -std=gnu99 $CFLAGS"
+  LDFLAGS_[2]="-L$FINAL_INSTALL_DIR/lib -L$NDI_LIB_DIR -lndi $LDFLAGS"
+
   ####
   # frei0r
   CONFIG[3]="./configure --prefix=$FINAL_INSTALL_DIR --libdir=$FINAL_INSTALL_DIR/lib"
@@ -868,7 +827,7 @@ function mlt_check_configure {
       # AUDIO
       disable-sox)
         if test "0" = "$MLT_DISABLE_SOX" ; then
-          mlt_format_optional sox "sound effects/operations" "sox-dev"
+          mlt_format_required sox "sound effects/operations" "sox-dev"
           DODIE=1
         fi 
       ;;
@@ -1219,14 +1178,12 @@ function main {
 
   date=`date +'%Y%m%d'`
   
-  cp /root/melted/melted.conf* /root/melted/$date/etc/
-  cp /root/melted/start-melted.conf /root/melted/$date/etc/
-  cp /root/melted/preview/preview-feed /root/melted/$date/bin/
-  cp /root/melted/preview/start-video-preview.sh /root/melted/$date/
-  cp /root/melted/start-melted-server /root/melted/$date/
-  cp /root/melted/stop-melted-server /root/melted/$date/
-  cp /root/melted/source-me /root/melted/$date/
-  # All is well, that ends well
+  cp $INSTALL_DIR/melted.conf* $FINAL_INSTALL_DIR/$date/etc/
+  cp $INSTALL_DIR/start-melted.conf $FINAL_INSTALL_DIR/$date/etc/
+  cp $INSTALL_DIR/start-melted-server $FINAL_INSTALL_DIR/$date/
+  cp $INSTALL_DIR/stop-melted-server $FINAL_INSTALL_DIR/$date/
+  cp $INSTALL_DIR/source-me $FINAL_INSTALL_DIR/$date/
+
   exit 0
 }
 
