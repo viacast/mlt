@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 /** \brief Virtual playlist entry used by mlt_playlist_s
 */
@@ -412,6 +413,18 @@ static void mlt_playlist_next( mlt_listener listener, mlt_properties owner, mlt_
 		listener( owner, self, args[ 0 ] );
 }
 
+struct run_and_play_args {
+	char *command;
+	mlt_producer producer;
+	int seek;
+};
+
+void *run_and_play(void *a) {
+	struct run_and_play_args *args = (struct run_and_play_args *)a;
+	system(args->command);
+	mlt_producer_set_speed(args->producer, 1.0);
+	mlt_producer_seek(args->producer, args->seek);
+}
 
 /** Seek in the virtual playlist.
  *
@@ -508,8 +521,53 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 	// fprintf(stderr, "\n");
 
 	char *playcast_id = mlt_properties_get(self, "meta.playcast.current-id");
-	int is_last_frame = original == total - 1;
+	int is_first_frame = mlt_properties_get_int(self, "meta.playcast.is-first-frame");
+	int is_last_frame = mlt_properties_get_int(self, "meta.playcast.is-last-frame");
 
+	if (!playcast_id) {
+		goto skip_run_sh;
+	}
+
+	if (!mlt_producer_get_speed(self) || (!is_first_frame && !is_last_frame)) {
+		goto skip_run_sh;
+	}
+
+	char run_sh_prop_name[1024];
+	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run-sh-start", playcast_id);
+	char *command_start = mlt_properties_get(self, run_sh_prop_name);
+	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run-sh-end", playcast_id);
+	char *command_end = mlt_properties_get(self, run_sh_prop_name);
+
+	if (!command_start && !command_end) {
+		goto skip_run_sh;
+	}
+	pthread_t run_and_play_thread;
+	char command_fork[10240];
+	if (is_first_frame && command_start && strlen(command_start)) {
+		snprintf(command_fork, 10239, "timeout 5 %s", command_start);
+		fprintf(stderr, "run start \"%s\"\n", command_fork);
+		mlt_producer_set_speed(self, 0);
+		mlt_producer_seek(self, original-1);
+		struct run_and_play_args cmd = {
+			.command = command_fork,
+			.producer = self,
+			.seek = original
+		};
+		pthread_create(&run_and_play_thread, NULL, &run_and_play, &cmd);
+	}
+	if (is_last_frame && command_end && strlen(command_end)) {
+		snprintf(command_fork, 10239, "timeout 5 %s", command_end);
+		fprintf(stderr, "run end \"%s\"\n", command_fork);
+		mlt_producer_set_speed(self, 0);
+		struct run_and_play_args cmd = {
+			.command = command_fork,
+			.producer = self,
+			.seek = original
+		};
+		pthread_create(&run_and_play_thread, NULL, &run_and_play, &cmd);
+	}
+
+skip_run_sh:;
 	char pause_prop_name[1024];
 	snprintf(pause_prop_name, 1023, "meta.playcast.%s.pause-start", playcast_id);
 	int pause_start = mlt_properties_get_int(self, pause_prop_name);

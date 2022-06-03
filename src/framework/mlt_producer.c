@@ -768,38 +768,15 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	int is_last_frame = 0;
 
 	if (_speed) {
-		is_first_frame = position == in_point + 1;
-		is_last_frame = position == out_point;
+		is_first_frame = position == in_point;
+		is_last_frame = position == out_point - 1;
 	}
 
-	if (!is_first_frame && !is_last_frame) {
-		goto skip_run_sh;
-	}
-
-	char run_sh_prop_name[1024];
-	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run-sh-start", playcast_id);
-	char *command_start = mlt_properties_get(frame_properties, run_sh_prop_name);
-	snprintf(run_sh_prop_name, 1023, "meta.playcast.%s.run-sh-end", playcast_id);
-	char *command_end = mlt_properties_get(frame_properties, run_sh_prop_name);
-
-	if (!command_start && !command_end) {
-		goto skip_run_sh;
-	}
-
-	char command_fork[10240];
-	if (is_first_frame && command_start && strlen(command_start)) {
-		snprintf(command_fork, 10239, "%s &", command_start);
-		fprintf(stderr, "run start \"%s\"\n", command_fork);
-		system(command_fork);
-	}
-	if (is_last_frame && command_end && strlen(command_end)) {
-		snprintf(command_fork, 10239, "%s &", command_end);
-		fprintf(stderr, "run end \"%s\"\n", command_fork);
-		system(command_fork);
-	}
+	mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(playlist), "meta.playcast.is-first-frame", is_first_frame);
+	mlt_properties_set_int(MLT_PRODUCER_PROPERTIES(playlist), "meta.playcast.is-last-frame", is_last_frame);
 
 skip_run_sh:;
-	if (!playlist) {
+	if (!playlist || !playcast_id) {
 		goto skip_watermark;
 	}
 
@@ -894,6 +871,7 @@ skip_run_sh:;
 				if (!avproducer) {
 					continue;
 				}
+
 				mlt_properties avproperties = MLT_PRODUCER_PROPERTIES(avproducer);
 
 				char *avproducer_playcast_id = mlt_properties_get(avproperties, "meta.playcast.id");
