@@ -845,12 +845,13 @@ skip_run_sh:;
 		}
 
 		if (!watermark_target_out || !strlen(watermark_target_out)) {
-			goto next_watermark;
+			watermark_target_out = watermark_target_in;
 		}
 
-		// fprintf(stderr, "generating watermark: %s p='%s' g='%s' in=%d out=%d\n", watermark_id, watermark_filepath, watermark_geometry, watermark_in, watermark_out);
+		// fprintf(stderr, "generating watermark: %s p='%s' g='%s' in=%d out=%d\n", watermark_id, watermark_filepath, watermark_geometry, watermark_transition_in_point, watermark_transition_out_point);
 
 		int in_watermark_block = 0;
+		int was_current = 0;
 
 		for (int i = 0; i < playlist->count; ++i) {
 			mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[i]->producer)), "multitrack", NULL);
@@ -887,24 +888,32 @@ skip_run_sh:;
 				}
 
 				snprintf(watermark_prop_name, 1023, "watermark-%s", watermark_id);
-				if (!in_watermark_block || strcmp(avproducer_playcast_id, playcast_id)) {
+				if (!in_watermark_block || (strcmp(avproducer_playcast_id, playcast_id) && !was_current)) {
 					mlt_filter watermark = mlt_properties_get_data(avproperties, watermark_prop_name, NULL);
 					if (watermark) {
 						mlt_producer_detach(avproducer, watermark);
+						mlt_properties_set_data(avproperties, watermark_prop_name, NULL, 0, (mlt_destructor)mlt_filter_close, NULL);
+						mlt_properties_set_int(avproperties, "has-watermark", 0);
 					}
-					mlt_properties_set_data(avproperties, watermark_prop_name, NULL, 0, (mlt_destructor)mlt_filter_close, NULL);
 					if (is_target_out) {
 						in_watermark_block = 0;
 					}
 					continue;
 				}
 
+				int skip = strcmp(avproducer_playcast_id, playcast_id) && !was_current;
+				was_current = !strcmp(avproducer_playcast_id, playcast_id);
+				if (skip) {
+					continue;
+				}
+
 				mlt_filter watermark = mlt_properties_get_data(avproperties, watermark_prop_name, NULL);
-				if(!watermark) {
+				if (!watermark && !mlt_properties_get_int(avproperties, "has-watermark")) {
 					mlt_profile profile = mlt_service_profile(MLT_PRODUCER_SERVICE(avproducer));
 					watermark = mlt_factory_filter(profile, "watermark", NULL);
 					mlt_properties_set_data(avproperties, watermark_prop_name, watermark, 0, (mlt_destructor)mlt_filter_close, NULL);
 					mlt_producer_attach(avproducer, watermark);
+					mlt_properties_set_int(avproperties, "has-watermark", 1);
 				}
 				mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
 				mlt_properties_set(wm_properties, "resource", watermark_filepath);
@@ -924,9 +933,8 @@ skip_run_sh:;
 				} else {
 					mlt_properties_set(wm_properties, "geometry", "0/0:100%x100%");
 				}
-
 				if (is_target_out) {
-					in_watermark_block = 0;
+					goto next_watermark;
 				}
 			}
 		}
