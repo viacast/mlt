@@ -463,8 +463,9 @@ int mlt_properties_inherit( mlt_properties self, mlt_properties that )
 		if ( value != NULL )
 		{
 			char *name = mlt_properties_get_name( that, i );
-			if (name && strcmp("properties", name))
+			if (name && strncmp("meta.playcast.", name, 14) && strcmp("properties", name)) {
 				mlt_properties_set_string( self, name, value );
+			}
 		}
 	}
 
@@ -536,7 +537,7 @@ static inline mlt_property mlt_properties_find_ignore( mlt_properties self, cons
 	}
 	mlt_properties_unlock( self );
 
-	if (!ignore_deleted && mlt_property_is_deleted(value)) {
+	if (!ignore_deleted && mlt_property_is_deleted(value) == 1) {
 		return NULL;
 	}
 
@@ -902,7 +903,7 @@ char *mlt_properties_get_name( mlt_properties self, int index )
 {
 	if ( !self ) return NULL;
 	property_list *list = self->local;
-	if ( index >= 0 && index < list->count )
+	if ( index >= 0 && index < list->count && !mlt_property_is_deleted(list->value[index]) )
 		return list->name[ index ];
 	return NULL;
 }
@@ -2791,6 +2792,15 @@ int mlt_properties_delete( mlt_properties self, const char *name )
 
 	mlt_properties_unlock( self );
 	return 0;
+}
+
+int mlt_properties_is_deleted( mlt_properties self, const char *name ) {
+	property_list *list = self->local;
+	mlt_property property = mlt_properties_find( self, name );
+	if (property == NULL) {
+		return 0;
+	}
+	return mlt_property_is_deleted(property);
 }
 
 void mlt_properties_test() {

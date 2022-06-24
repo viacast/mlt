@@ -737,6 +737,9 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 		for ( i = 0; i < count; i ++ )
 		{
 			char *name = mlt_properties_get_name( p_props, i );
+			if (!name) {
+				continue;
+			}
 			if ( !strncmp( name, "meta.", 5 ) )
 				mlt_properties_set( f_props, name, mlt_properties_get_value( p_props, i ) );
 			else if ( !strncmp( name, "set.", 4 ) )
@@ -748,8 +751,9 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	mlt_properties frame_properties = MLT_FRAME_PROPERTIES( *frame );
 	mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
 
-	// fprintf(stderr, "\n");
+	// fprintf(stderr, "producer\n");
 	// mlt_properties_dump(producer_properties, stderr);
+	// fprintf(stderr, "\n");
 
 	if (!frame) {
 		goto skip_playcast;
@@ -780,166 +784,141 @@ skip_run_sh:;
 		goto skip_watermark;
 	}
 
-	char *watermarks_prop = NULL;
-	char *watermark_id = NULL;
+	// fprintf(stderr, "frame\n");
+	// mlt_properties_dump(frame_properties, stderr);
+	// fprintf(stderr, "\n");
 
-	watermarks_prop = mlt_properties_get(frame_properties, "meta.playcast.watermarks");
+	int watermark_count = mlt_properties_get_int(frame_properties, "meta.playcast.watermark-count");
 
-	if (!watermarks_prop || !strlen(watermarks_prop)) {
+	if (!watermark_count) {
 		goto skip_watermark;
 	}
 
-	char watermarks[10240];
-	strncpy(watermarks, watermarks_prop, 10239);
-
-	char *save_watermarks = watermarks;
-	const char watermark_delim[2] = ":";
-	watermark_id = strtok_r(watermarks, watermark_delim, &save_watermarks);
-
-	while (watermark_id) {
-		char watermark_prop_name[1024];
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.target-in", watermark_id);
-		char *watermark_target_in = mlt_properties_get(frame_properties, watermark_prop_name);
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.target-out", watermark_id);
-		char *watermark_target_out = mlt_properties_get(frame_properties, watermark_prop_name);
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.filepath", watermark_id);
-		char *watermark_filepath = mlt_properties_get(frame_properties, watermark_prop_name);
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.geometry", watermark_id);
-		char *watermark_geometry = mlt_properties_get(frame_properties, watermark_prop_name);
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-in.type", watermark_id);
-		char *watermark_transition_in_type = mlt_properties_get(frame_properties, watermark_prop_name);
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-in.length", watermark_id);
-		int watermark_transition_in_length = mlt_properties_get_int(frame_properties, watermark_prop_name);
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.type", watermark_id);
-		char *watermark_transition_out_type = mlt_properties_get(frame_properties, watermark_prop_name);
-		
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.length", watermark_id);
-		int watermark_transition_out_length = mlt_properties_get_int(frame_properties, watermark_prop_name);
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.loop", watermark_id);
-		int watermark_loop = mlt_properties_get_int(frame_properties, watermark_prop_name);
-
-		int watermark_transition_in_point = -1, watermark_transition_out_point = -1;
-
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-in.point", watermark_id);
-		char *wm_in = mlt_properties_get(frame_properties, watermark_prop_name);
-		if (wm_in && strlen(wm_in)){
-			watermark_transition_in_point = mlt_properties_get_int(frame_properties, watermark_prop_name);
+	char *last_watermark_id = NULL;
+	for (int i = 0; i < playlist->count; ++i) {
+		mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[i]->producer)), "multitrack", NULL);
+		if (!multitrack || !multitrack->list || !multitrack->count) {
+			goto skip_watermark;
+		}
+		mlt_track track = multitrack->list[0];
+		if (!track || !track->producer) {
+			goto skip_watermark;
+		}
+		mlt_playlist playlist2 = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(track->producer), "playlist", NULL);
+		if (!playlist2) {
+			goto skip_watermark;
 		}
 
-		snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.point", watermark_id);
-		char *wm_out = mlt_properties_get(frame_properties, watermark_prop_name);
-		if (wm_out && strlen(wm_out)){
-			watermark_transition_out_point = mlt_properties_get_int(frame_properties, watermark_prop_name);
-		}
-
-		if (!watermark_target_in || !strlen(watermark_target_in)) {
-			goto next_watermark;
-		}
-
-		if (!watermark_target_out || !strlen(watermark_target_out)) {
-			watermark_target_out = watermark_target_in;
-		}
-
-		// fprintf(stderr, "generating watermark: %s p='%s' g='%s' in=%d out=%d\n", watermark_id, watermark_filepath, watermark_geometry, watermark_transition_in_point, watermark_transition_out_point);
-
-		int in_watermark_block = 0;
-		int was_current = 0;
-
-		for (int i = 0; i < playlist->count; ++i) {
-			mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[i]->producer)), "multitrack", NULL);
-			if (!multitrack || !multitrack->list || !multitrack->count) {
-				goto skip_watermark;
-			}
-			mlt_track track = multitrack->list[0];
-			if (!track || !track->producer) {
-				goto skip_watermark;
-			}
-			mlt_playlist playlist2 = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(track->producer), "playlist", NULL);
-			if (!playlist2) {
-				goto skip_watermark;
+		for (int j = 0; j < playlist2->count; ++j) {
+			mlt_producer avproducer = mlt_producer_cut_parent(playlist2->list[j]->producer);
+			if (!avproducer) {
+				continue;
 			}
 
-			for (int j = 0; j < playlist2->count; ++j) {
-				mlt_producer avproducer = mlt_producer_cut_parent(playlist2->list[j]->producer);
-				if (!avproducer) {
-					continue;
-				}
+			mlt_properties avproperties = MLT_PRODUCER_PROPERTIES(avproducer);
 
-				mlt_properties avproperties = MLT_PRODUCER_PROPERTIES(avproducer);
+			char *avproducer_playcast_id = mlt_properties_get(avproperties, "meta.playcast.id");
+			if (!avproducer_playcast_id) {
+				continue;
+			}
 
-				char *avproducer_playcast_id = mlt_properties_get(avproperties, "meta.playcast.id");
-				if (!avproducer_playcast_id) {
-					continue;
-				}
+			// mlt_properties_dump(frame_properties, stderr);
+			// fprintf(stderr, "\n");
 
-				int is_target_in = !strcmp(avproducer_playcast_id, watermark_target_in);
-				int is_target_out = !strcmp(avproducer_playcast_id, watermark_target_out);
+			char watermark_prop_name[1024];
+			snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark-target-in", avproducer_playcast_id);
+			char *watermark_in_id = mlt_properties_get(frame_properties, watermark_prop_name);
+			snprintf(watermark_prop_name, 1023, "meta.playcast.%s.watermark-target-out", avproducer_playcast_id);
+			char *watermark_out_id = mlt_properties_get(frame_properties, watermark_prop_name);
 
-				if (is_target_in) {
-					in_watermark_block = 1;
-				}
+			int is_target_in = watermark_in_id ? 1 : 0;
+			int is_target_out = watermark_out_id ? 1 : 0;
 
-				snprintf(watermark_prop_name, 1023, "watermark-%s", watermark_id);
-				if (!in_watermark_block || (strcmp(avproducer_playcast_id, playcast_id) && !was_current)) {
-					mlt_filter watermark = mlt_properties_get_data(avproperties, watermark_prop_name, NULL);
-					if (watermark) {
-						mlt_producer_detach(avproducer, watermark);
-						mlt_properties_set_data(avproperties, watermark_prop_name, NULL, 0, (mlt_destructor)mlt_filter_close, NULL);
-						mlt_properties_set_int(avproperties, "has-watermark", 0);
-					}
-					if (is_target_out) {
-						in_watermark_block = 0;
-					}
-					continue;
-				}
+			char *watermark_id = NULL;
 
-				int skip = strcmp(avproducer_playcast_id, playcast_id) && !was_current;
-				was_current = !strcmp(avproducer_playcast_id, playcast_id);
-				if (skip) {
-					continue;
-				}
+			if (is_target_in) {
+				watermark_id = watermark_in_id;
+				last_watermark_id = watermark_in_id;
+			} 
+			if (is_target_out) {
+				watermark_id = watermark_out_id;
+				last_watermark_id = NULL;
+			}
+			if (!is_target_in && !is_target_out) {
+				watermark_id = last_watermark_id;
+			}
 
-				mlt_filter watermark = mlt_properties_get_data(avproperties, watermark_prop_name, NULL);
-				if (!watermark && !mlt_properties_get_int(avproperties, "has-watermark")) {
-					mlt_profile profile = mlt_service_profile(MLT_PRODUCER_SERVICE(avproducer));
-					watermark = mlt_factory_filter(profile, "watermark", NULL);
-					mlt_properties_set_data(avproperties, watermark_prop_name, watermark, 0, (mlt_destructor)mlt_filter_close, NULL);
-					mlt_producer_attach(avproducer, watermark);
-					mlt_properties_set_int(avproperties, "has-watermark", 1);
+			if (!watermark_id) {
+				mlt_filter watermark = mlt_properties_get_data(avproperties, "watermark", NULL);
+				if (watermark) {
+					mlt_producer_detach(avproducer, watermark);
+					mlt_properties_set_data(avproperties, "watermark", NULL, 0, (mlt_destructor)mlt_filter_close, NULL);
 				}
-				mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
-				mlt_properties_set(wm_properties, "resource", watermark_filepath);
-				mlt_properties_set_int(wm_properties, "loop", watermark_loop);
-				if (is_target_in) {
-					mlt_properties_set_int(wm_properties, "transition-in.point", watermark_transition_in_point);
-					mlt_properties_set(wm_properties, "transition-in.type", watermark_transition_in_type);
-					mlt_properties_set_int(wm_properties, "transition-in.length", watermark_transition_in_length);
-				}
-				if (is_target_out) {
-					mlt_properties_set_int(wm_properties, "transition-out.point", watermark_transition_out_point);
-					mlt_properties_set(wm_properties, "transition-out.type", watermark_transition_out_type);
-					mlt_properties_set_int(wm_properties, "transition-out.length", watermark_transition_out_length);
-				}
-				if (watermark_geometry && strlen(watermark_geometry)) {
-					mlt_properties_set(wm_properties, "geometry", watermark_geometry);
-				} else {
-					mlt_properties_set(wm_properties, "geometry", "0/0:100%x100%");
-				}
-				if (is_target_out) {
-					goto next_watermark;
-				}
+				continue;
+			}
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.filepath", watermark_id);
+			char *watermark_filepath = mlt_properties_get(frame_properties, watermark_prop_name);
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.geometry", watermark_id);
+			char *watermark_geometry = mlt_properties_get(frame_properties, watermark_prop_name);
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-in.type", watermark_id);
+			char *watermark_transition_in_type = mlt_properties_get(frame_properties, watermark_prop_name);
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-in.length", watermark_id);
+			int watermark_transition_in_length = mlt_properties_get_int(frame_properties, watermark_prop_name);
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.type", watermark_id);
+			char *watermark_transition_out_type = mlt_properties_get(frame_properties, watermark_prop_name);
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.length", watermark_id);
+			int watermark_transition_out_length = mlt_properties_get_int(frame_properties, watermark_prop_name);
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.loop", watermark_id);
+			int watermark_loop = mlt_properties_get_int(frame_properties, watermark_prop_name);
+
+			int watermark_transition_in_point = -1, watermark_transition_out_point = -1;
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-in.point", watermark_id);
+			char *wm_in = mlt_properties_get(frame_properties, watermark_prop_name);
+			if (wm_in && strlen(wm_in)){
+				watermark_transition_in_point = mlt_properties_get_int(frame_properties, watermark_prop_name);
+			}
+
+			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.transition-out.point", watermark_id);
+			char *wm_out = mlt_properties_get(frame_properties, watermark_prop_name);
+			if (wm_out && strlen(wm_out)){
+				watermark_transition_out_point = mlt_properties_get_int(frame_properties, watermark_prop_name);
+			}
+
+			mlt_filter watermark = mlt_properties_get_data(avproperties, "watermark", NULL);
+			if (!watermark) {
+				mlt_profile profile = mlt_service_profile(MLT_PRODUCER_SERVICE(avproducer));
+				watermark = mlt_factory_filter(profile, "watermark", NULL);
+				mlt_properties_set_data(avproperties, "watermark", watermark, 0, (mlt_destructor)mlt_filter_close, NULL);
+				mlt_producer_attach(avproducer, watermark);
+			}
+
+			mlt_properties wm_properties = MLT_FILTER_PROPERTIES(watermark);
+			mlt_properties_set(wm_properties, "resource", watermark_filepath);
+			mlt_properties_set_int(wm_properties, "loop", watermark_loop);
+			if (is_target_in) {
+				mlt_properties_set_int(wm_properties, "transition-in.point", watermark_transition_in_point);
+				mlt_properties_set(wm_properties, "transition-in.type", watermark_transition_in_type);
+				mlt_properties_set_int(wm_properties, "transition-in.length", watermark_transition_in_length);
+			}
+			if (is_target_out) {
+				mlt_properties_set_int(wm_properties, "transition-out.point", watermark_transition_out_point);
+				mlt_properties_set(wm_properties, "transition-out.type", watermark_transition_out_type);
+				mlt_properties_set_int(wm_properties, "transition-out.length", watermark_transition_out_length);
+			}
+			if (watermark_geometry && strlen(watermark_geometry)) {
+				mlt_properties_set(wm_properties, "geometry", watermark_geometry);
+			} else {
+				mlt_properties_set(wm_properties, "geometry", "0/0:100%x100%");
 			}
 		}
-next_watermark:
-		watermark_id = strtok_r(NULL, watermark_delim, &save_watermarks);
 	}
 
 skip_watermark:

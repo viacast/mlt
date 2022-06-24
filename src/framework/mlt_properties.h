@@ -115,5 +115,6 @@ extern int mlt_properties_from_utf8( mlt_properties properties, const char *name
 extern int mlt_properties_to_utf8( mlt_properties properties, const char *name_from, const char *name_to );
 
 extern int mlt_properties_delete( mlt_properties self, const char *name );
+extern int mlt_properties_is_deleted( mlt_properties self, const char *name );
 extern void mlt_properties_test();
 #endif

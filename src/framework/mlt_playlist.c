@@ -517,6 +517,7 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 	if ( original == total - 2 )
 		mlt_events_fire( properties, "playlist-next", i, NULL );
 
+	// fprintf(stderr, "playlist\n");
 	// mlt_properties_dump(MLT_PRODUCER_PROPERTIES(self), stderr);
 	// fprintf(stderr, "\n");
 

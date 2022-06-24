@@ -188,7 +188,7 @@ void mlt_property_set_deleted( mlt_property self, int deleted )
 
 int mlt_property_is_deleted( mlt_property self )
 {
-	int result = 1;
+	int result = -1;
 	if (self) {
 		pthread_mutex_lock( &self->mutex );
 		result = self->deleted;
