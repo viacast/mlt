@@ -794,6 +794,7 @@ skip_run_sh:;
 		goto skip_watermark;
 	}
 
+	int was_current = 0;
 	char *last_watermark_id = NULL;
 	for (int i = 0; i < playlist->count; ++i) {
 		mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[i]->producer)), "multitrack", NULL);
@@ -848,14 +849,17 @@ skip_run_sh:;
 				watermark_id = last_watermark_id;
 			}
 
-			if (!watermark_id) {
+			if (!watermark_id || (strcmp(avproducer_playcast_id, playcast_id) && !was_current)) {
 				mlt_filter watermark = mlt_properties_get_data(avproperties, "watermark", NULL);
 				if (watermark) {
 					mlt_producer_detach(avproducer, watermark);
 					mlt_properties_set_data(avproperties, "watermark", NULL, 0, (mlt_destructor)mlt_filter_close, NULL);
 				}
+				was_current = !strcmp(avproducer_playcast_id, playcast_id);
 				continue;
 			}
+
+			was_current = !strcmp(avproducer_playcast_id, playcast_id);
 
 			snprintf(watermark_prop_name, 1023, "meta.playcast.watermark.%s.filepath", watermark_id);
 			char *watermark_filepath = mlt_properties_get(frame_properties, watermark_prop_name);
