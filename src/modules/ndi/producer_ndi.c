@@ -160,7 +160,7 @@ static void* producer_ndi_feeder( void* p )
 			case NDIlib_frame_type_video:
 				pthread_mutex_lock( &self->lock );
 				mlt_deque_push_back( self->v_queue, video );
-				if ( mlt_deque_count( self->v_queue ) >= self->v_queue_limit )
+				if ( mlt_deque_count( self->v_queue ) > self->v_queue_limit )
 				{
 					video = mlt_deque_pop_front( self->v_queue );
 					NDIlib_recv_free_video( self->recv, video );
@@ -221,7 +221,7 @@ static void* producer_ndi_feeder( void* p )
 				}
 				if ( audio_packet )
 					mlt_deque_push_back( self->a_queue, audio_packet );
-				if ( mlt_deque_count( self->a_queue ) >= self->a_queue_limit )
+				if ( mlt_deque_count( self->a_queue ) > self->a_queue_limit )
 				{
 					audio_packet = mlt_deque_pop_front( self->a_queue );
 					mlt_pool_release( audio_packet->p_data );
@@ -624,7 +624,7 @@ mlt_producer producer_ndi_init( mlt_profile profile, mlt_service_type type, cons
 		self->v_queue = mlt_deque_init();
 		self->a_queue = mlt_deque_init();
 		self->v_queue_limit = 30;
-		self->a_queue_limit = 30;
+		self->a_queue_limit = 60;
 		self->v_prefill_high = 20;
 		self->v_prefill_low = 5;
 		self->last_position = -1;
