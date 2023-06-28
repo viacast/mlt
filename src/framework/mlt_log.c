@@ -28,7 +28,7 @@
 #include <time.h>
 #endif
 
-static int log_level = MLT_LOG_WARNING;
+static int log_level = MLT_LOG_INFO;
 
 void default_callback( void* ptr, int level, const char* fmt, va_list vl )
 {
