@@ -255,6 +255,7 @@ public:
 		{
 			// Initialize some members
 			m_vancLines = mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "vanc" );
+			m_vancLines = -1;
 			if ( m_vancLines == -1 )
 				m_vancLines = profile->height <= 512 ? 26 : 32;
 
@@ -262,7 +263,7 @@ public:
 				profile = mlt_service_profile( MLT_PRODUCER_SERVICE( getProducer() ) );
 
 			// Get the display mode
-			BMDDisplayMode displayMode = getDisplayMode( profile, m_vancLines );
+			BMDDisplayMode displayMode = getDisplayMode( profile, 0 );
 			if ( displayMode == (BMDDisplayMode) bmdDisplayModeNotSupported )
 			{
 				mlt_log_info( getProducer(), "profile = %dx%d %f fps %s\n", profile->width, profile->height,
