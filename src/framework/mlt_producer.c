@@ -21,6 +21,7 @@
  */
 
 #include "mlt_producer.h"
+#include "mlt_consumer.h"
 #include "mlt_factory.h"
 #include "mlt_frame.h"
 #include "mlt_parser.h"
@@ -767,6 +768,12 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	int position = mlt_properties_get_int(frame_properties, "original_position");
 	int in_point = mlt_properties_get_int(frame_properties, "in");
 	int out_point = mlt_properties_get_int(frame_properties, "out");
+	int has_scte_104 = mlt_properties_get_int(frame_properties, "meta.playcast.has_scte_104");
+
+	if (has_scte_104){
+		mlt_producer_seek( MLT_PRODUCER(service), 0 );
+		mlt_properties_set_int( MLT_CONSUMER_PROPERTIES( MLT_CONSUMER(service) ), "refresh", 1 );
+	}
 
 	int is_first_frame = 0;
 	int is_last_frame = 0;
