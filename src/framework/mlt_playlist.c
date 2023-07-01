@@ -21,6 +21,7 @@
  */
 
 #include "mlt_playlist.h"
+#include "mlt_log.h"
 #include "mlt_tractor.h"
 #include "mlt_multitrack.h"
 #include "mlt_field.h"
@@ -2251,6 +2252,21 @@ static int producer_get_frame( mlt_producer producer, mlt_frame_ptr frame, int i
 		mlt_deque_pop_front( MLT_FRAME_AUDIO_STACK( *frame ) );
 	}
 	mlt_properties_dec_ref(MLT_SERVICE_PROPERTIES(real));
+
+	int has_scte_104 = mlt_properties_get_int(MLT_FRAME_PROPERTIES( *frame ), "meta.playcast.has_scte_104");
+
+	if (has_scte_104){
+
+		int current = mlt_playlist_current_clip( self );
+		mlt_position position = mlt_producer_position( MLT_PLAYLIST_PRODUCER( self ) );
+
+		// We need all the details about the current clip
+		mlt_playlist_clip_info current_info;
+		mlt_playlist_get_clip_info( self, &current_info, current );
+
+		mlt_producer_seek( producer, (current_info.start + current_info.frame_count));
+		mlt_playlist_virtual_refresh( self );
+	}
 
 	// Check if we're at the end of the clip
 	mlt_properties properties = MLT_FRAME_PROPERTIES( *frame );
