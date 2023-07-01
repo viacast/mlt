@@ -2257,15 +2257,22 @@ static int producer_get_frame( mlt_producer producer, mlt_frame_ptr frame, int i
 
 	if (has_scte_104){
 
-		int current = mlt_playlist_current_clip( self );
-		mlt_position position = mlt_producer_position( MLT_PLAYLIST_PRODUCER( self ) );
+		char * action = mlt_properties_get( MLT_PRODUCER_PROPERTIES( producer ), "scte_104_action");
 
-		// We need all the details about the current clip
-		mlt_playlist_clip_info current_info;
-		mlt_playlist_get_clip_info( self, &current_info, current );
+		if (action == NULL || strcmp(action, "next") == 0){
+			int current = mlt_playlist_current_clip( self );
+			mlt_position position = mlt_producer_position( MLT_PLAYLIST_PRODUCER( self ) );
 
-		mlt_producer_seek( producer, (current_info.start + current_info.frame_count));
-		mlt_playlist_virtual_refresh( self );
+			// We need all the details about the current clip
+			mlt_playlist_clip_info current_info;
+			mlt_playlist_get_clip_info( self, &current_info, current );
+
+			mlt_producer_seek( producer, (current_info.start + current_info.frame_count));
+		} else if (strcmp(action, "pause") == 0){
+			mlt_producer_set_speed(producer, 0);
+		}
+
+
 	}
 
 	// Check if we're at the end of the clip
