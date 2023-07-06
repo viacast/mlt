@@ -317,7 +317,7 @@ public:
 			/* We specifically want to see packets that have bad checksums. */
 			vanchdl->allow_bad_checksums = 1;
 			vanchdl->warn_on_decode_failure = 1;
-			vanchdl->verbose = 1;
+			vanchdl->verbose = 0;
 			vanchdl->callbacks = &callbacks;
 			vanchdl->callback_context =  this;
       
