@@ -124,6 +124,7 @@ private:
 	BMDPixelFormat   m_pixel_format;
 	int              m_colorspace;
 	int              m_vancLines;
+	int							 get_vanc;
 	// mlt_cache        m_cache;
 	bool             m_reprio;
 	mlt_position     m_last_position;
@@ -258,7 +259,6 @@ public:
 		{
 			// Initialize some members
 			m_vancLines = mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "vanc" );
-			m_vancLines = -1;
 			if ( m_vancLines == -1 )
 				m_vancLines = profile->height <= 512 ? 26 : 32;
 
@@ -360,7 +360,8 @@ static int cb_SCTE_104(void *callback_context, struct klvanc_context_s *ctx, str
 	mlt_service service = MLT_PRODUCER_SERVICE( obj->getProducer());
 	mlt_properties producer_p =  MLT_PRODUCER_PROPERTIES(obj->getProducer());
 
-	mlt_properties_set_int(producer_p, "has_scte_104", 1);
+	if (pkt->mo_msg.ops->sr_data.splice_insert_type == 2)
+		mlt_properties_set_int(producer_p, "has_scte_104", 1);
 
 	return 0;
 }
@@ -612,33 +613,18 @@ void convertColorspaceAndParseVanc(unsigned char *buf, unsigned int uiWidth, uns
 					image, image_buffers, image_strides );
 
 				// Capture VANC
-				if ( m_vancLines > 0 )
+				get_vanc = mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "_get_vanc" );
+				if ( get_vanc )
 				{
 					IDeckLinkVideoFrameAncillary* vanc = 0;
 					if ( video->GetAncillaryData( &vanc ) == S_OK && vanc )
 					{
 						unsigned int uiWidth = video->GetWidth();
 
-						for ( int i = 1; i < m_vancLines + 1; i++ )
+						for ( int i = 1; i < 32 + 1; i++ )
 						{
-							unsigned char* out[4] = {
-								image_buffers[0] + (i - 1) * image_strides[0],
-								image_buffers[1] + (i - 1) * image_strides[1],
-								image_buffers[2] + (i - 1) * image_strides[2],
-								image_buffers[3] + (i - 1) * image_strides[3] };
-
 							if ( vanc->GetBufferForVerticalBlankingLine( i, &buffer ) == S_OK ){
 								convertColorspaceAndParseVanc((unsigned char *)buffer, uiWidth, i);
-								copy_lines
-								(
-									m_pixel_format, (unsigned char*)buffer, video->GetRowBytes(),
-									fmt, out, image_strides,
-									video->GetWidth(), 1
-								);
-							} else
-							{
-								fill_line( fmt, out, image_strides, 0 );
-								mlt_log_debug( getProducer(), "failed capture vanc line %d\n", i );
 							}
 						}
 						SAFE_RELEASE(vanc);
