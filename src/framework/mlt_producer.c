@@ -752,9 +752,6 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	mlt_properties frame_properties = MLT_FRAME_PROPERTIES( *frame );
 	mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
 
-	// fprintf(stderr, "producer\n");
-	// mlt_properties_dump(producer_properties, stderr);
-	// fprintf(stderr, "\n");
 
 	if (!frame) {
 		goto skip_playcast;
