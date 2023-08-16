@@ -355,13 +355,23 @@ public:
 
 static int cb_SCTE_104(void *callback_context, struct klvanc_context_s *ctx, struct klvanc_packet_scte_104_s *pkt)
 {
-
+	time_t tm;
 	DeckLinkProducer *obj = (DeckLinkProducer *)callback_context;
 	mlt_service service = MLT_PRODUCER_SERVICE( obj->getProducer());
 	mlt_properties producer_p =  MLT_PRODUCER_PROPERTIES(obj->getProducer());
 
-	if (pkt->mo_msg.ops->sr_data.splice_insert_type == 2)
+	time(&tm);
+	mlt_log_info( obj->getProducer(), "Get scte 104: %s", ctime(&tm));
+
+	if (pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
+	 		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE){
 		mlt_properties_set_int(producer_p, "has_scte_104", 1);
+	}
+		mlt_log_info( obj->getProducer(), "%s", 
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_NORMAL ? "start normal" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE ? "start imediate" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICEEND_NORMAL ? "end normal" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICEEND_IMMEDIATE ? "end imediate" : "unknow");
 
 	return 0;
 }

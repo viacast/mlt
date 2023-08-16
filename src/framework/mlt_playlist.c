@@ -587,8 +587,10 @@ static mlt_service mlt_playlist_virtual_seek( mlt_playlist self, int *progressiv
 					mlt_properties_set_int(props, "meta.stop-producer", j != i);
 					int get_vanc = mlt_properties_get_int(MLT_PRODUCER_PROPERTIES(self), "get_vanc");
 					int _get_vanc = mlt_properties_get_int(props, "_get_vanc");
-					if (get_vanc != _get_vanc)
+					if (get_vanc != _get_vanc){
+						mlt_log_info(producer, "\nChange _get_vanc: %d -> %d\n", _get_vanc, get_vanc);
 						mlt_properties_set_int(props, "_get_vanc", get_vanc);
+					}
 				}
 			}
 		}
@@ -2262,6 +2264,7 @@ static int producer_get_frame( mlt_producer producer, mlt_frame_ptr frame, int i
 	if (has_scte_104){
 
 		char * action = mlt_properties_get( MLT_PRODUCER_PROPERTIES( producer ), "scte_104_action");
+		mlt_log_info(producer, "Scte Action: %s", action);
 
 		if (action == NULL || strcmp(action, "next") == 0){
 			int current = mlt_playlist_current_clip( self );
