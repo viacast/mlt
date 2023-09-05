@@ -274,6 +274,7 @@ public:
 				throw "Profile is not compatible with decklink.";
 			}
 
+			mlt_properties_dump( MLT_PRODUCER_PROPERTIES( getProducer()),stderr);
 			// Determine if supports input format detection
 #ifdef _WIN32
 			BOOL doesDetectFormat = FALSE;
@@ -361,17 +362,17 @@ static int cb_SCTE_104(void *callback_context, struct klvanc_context_s *ctx, str
 	mlt_properties producer_p =  MLT_PRODUCER_PROPERTIES(obj->getProducer());
 
 	time(&tm);
-	mlt_log_info( obj->getProducer(), "Get scte 104: %s", ctime(&tm));
+	mlt_log_info( obj->getProducer(), "Get scte 104: %s %s\n", 
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_NORMAL ? "start normal" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE ? "start imediate" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICEEND_NORMAL ? "end normal" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICEEND_IMMEDIATE ? "end imediate" : "unknow",
+		ctime(&tm));
 
 	if (pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
 	 		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE){
 		mlt_properties_set_int(producer_p, "has_scte_104", 1);
 	}
-		mlt_log_info( obj->getProducer(), "%s", 
-		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_NORMAL ? "start normal" :
-		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE ? "start imediate" :
-		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICEEND_NORMAL ? "end normal" :
-		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICEEND_IMMEDIATE ? "end imediate" : "unknow");
 
 	return 0;
 }
@@ -971,8 +972,9 @@ mlt_producer producer_decklink_init( mlt_profile profile, mlt_service_type type,
 			mlt_properties_set( properties, "resource", fresource );
 			mlt_properties_set( properties, "resource-n", resource );
 			mlt_properties_set_int( properties, "channels", 2 );
-			mlt_properties_set_int( properties, "buffer", 25 );
-			mlt_properties_set_int( properties, "prefill", 25 );
+			mlt_properties_set_int( properties, "buffer", 35 );
+			mlt_properties_set_int( properties, "prefill", 35 );
+			mlt_properties_set_int( properties, "priority", 1 );
 
 			char *e = getenv("MLT_DEFAULT_LIVE_SOURCE_LENGTH");
 			// defaults to ~24hrs at 29.97 fps

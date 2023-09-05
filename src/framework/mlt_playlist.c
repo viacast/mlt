@@ -2264,7 +2264,7 @@ static int producer_get_frame( mlt_producer producer, mlt_frame_ptr frame, int i
 	if (has_scte_104){
 
 		char * action = mlt_properties_get( MLT_PRODUCER_PROPERTIES( producer ), "scte_104_action");
-		mlt_log_info(producer, "Scte Action: %s", action);
+		mlt_log_info(producer, "Scte Action: %s\n", action == NULL ? "next" : action);
 
 		if (action == NULL || strcmp(action, "next") == 0){
 			int current = mlt_playlist_current_clip( self );
