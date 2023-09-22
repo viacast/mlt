@@ -2274,7 +2274,9 @@ static int producer_get_frame( mlt_producer producer, mlt_frame_ptr frame, int i
 			mlt_playlist_clip_info current_info;
 			mlt_playlist_get_clip_info( self, &current_info, current );
 
-			mlt_producer_seek( producer, (current_info.start + current_info.frame_count));
+			mlt_log_info(producer, "Seek -1\n");
+
+			mlt_producer_seek( producer, (current_info.start + current_info.frame_count -1));
 		} else if (strcmp(action, "pause") == 0){
 			mlt_producer_set_speed(producer, 0);
 		}
