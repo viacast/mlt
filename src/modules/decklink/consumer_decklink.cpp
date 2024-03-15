@@ -17,6 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <cstdio>
 #define __STDC_FORMAT_MACROS  /* see inttypes.h */
 #include <atomic>
 #include <framework/mlt.h>
@@ -756,6 +757,7 @@ done:
 	
 	struct SCTE104 parse_scte_104(const char *scte_104_str) {
 		struct SCTE104 scte_104;
+		mlt_properties consumer_properties = MLT_CONSUMER_PROPERTIES( getConsumer() );
 
 		if (!scte_104_str)
 				return scte_104;
@@ -789,8 +791,32 @@ done:
 		for (j = 0; j < i; ++j) {
 				if (j + 1 >= i)
 						continue;
-				if (!strcmp("-insert_type", args[j]))
-						scte_104.splice_insert_type = atoi(args[j+1]);
+				if (!strcmp("-insert_type", args[j])){
+						unsigned int temp_splice_insert_type = atoi(args[j+1]);
+						int temp_pre_roll_scte = (mlt_properties_get_int(consumer_properties, "preroll_scte"));
+						int scte_immediate_flag = (mlt_properties_get_int(consumer_properties, "scte_immediate"));
+
+						mlt_log_error(getConsumer(), "%s: Scte immediate flag: %s\n", __FUNCTION__, scte_immediate_flag?"yes":"no");
+						mlt_log_error(getConsumer(), "%s: Preroll scte: %d\n", __FUNCTION__, temp_pre_roll_scte);
+						
+						if (temp_splice_insert_type == SPLICESTART_IMMEDIATE){
+							if (scte_immediate_flag){
+								scte_104.splice_insert_type = SPLICESTART_IMMEDIATE;
+								continue;
+							}
+							scte_104.splice_insert_type = SPLICESTART_NORMAL;
+							scte_104.pre_roll_time = temp_pre_roll_scte;
+						}
+
+						if (temp_splice_insert_type == SPLICEEND_IMMEDIATE){
+							if (scte_immediate_flag){
+								scte_104.splice_insert_type = SPLICEEND_IMMEDIATE;
+								continue;
+							}
+							scte_104.splice_insert_type = SPLICEEND_NORMAL;
+							scte_104.pre_roll_time = temp_pre_roll_scte;
+						}
+				}
 				if (!strcmp("-event_id", args[j]))
 						scte_104.splice_event_id = atoi(args[j+1]);
 				if (!strcmp("-program_id", args[j]))
@@ -826,6 +852,7 @@ done:
 					return S_OK;
 			}
 
+			mlt_log_warning(getConsumer(), "Before scte: %s\n", scte);
 			struct SCTE104 scte_104 = parse_scte_104(scte);
 			if (!m_supports_vanc || !scte_104.splice_event_id)
 					return S_OK;
@@ -848,7 +875,7 @@ done:
 			// m_last_scte_sent_time = now;
 			m_last_scte_sent_event_id = scte_104.splice_event_id;
 			
-			mlt_log_warning(getConsumer(), "sending scte104: pid=%d:eid=%d:type=%d:duration=%d:preroll=%d\n", scte_104.unique_program_id, scte_104.splice_event_id, scte_104.splice_insert_type, scte_104.brk_duration, scte_104.pre_roll_time);
+			mlt_log_warning(getConsumer(), "After scte sending scte104: pid=%d:eid=%d:type=%d:duration=%d:preroll=%d\n", scte_104.unique_program_id, scte_104.splice_event_id, scte_104.splice_insert_type, scte_104.brk_duration, scte_104.pre_roll_time);
 
 			IDeckLinkVideoFrameAncillary *vanc;
 			result = decklink_frame->GetAncillaryData(&vanc);
