@@ -21,6 +21,7 @@
  */
 
 #include "mlt_producer.h"
+#include "mlt_consumer.h"
 #include "mlt_factory.h"
 #include "mlt_frame.h"
 #include "mlt_parser.h"
@@ -751,9 +752,6 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	mlt_properties frame_properties = MLT_FRAME_PROPERTIES( *frame );
 	mlt_properties producer_properties = MLT_PRODUCER_PROPERTIES( self );
 
-	// fprintf(stderr, "producer\n");
-	// mlt_properties_dump(producer_properties, stderr);
-	// fprintf(stderr, "\n");
 
 	if (!frame) {
 		goto skip_playcast;
@@ -767,7 +765,7 @@ static int producer_get_frame( mlt_service service, mlt_frame_ptr frame, int ind
 	int position = mlt_properties_get_int(frame_properties, "original_position");
 	int in_point = mlt_properties_get_int(frame_properties, "in");
 	int out_point = mlt_properties_get_int(frame_properties, "out");
-
+	
 	int is_first_frame = 0;
 	int is_last_frame = 0;
 

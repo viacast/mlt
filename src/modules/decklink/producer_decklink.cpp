@@ -27,6 +27,8 @@
 #include "common.h"
 
 #include <framework/mlt_slices.h>
+#include <libklvanc/vanc.h>
+
 
 struct copy_lines_sliced_desc
 {
@@ -108,6 +110,7 @@ class DeckLinkProducer
 	: public IDeckLinkInputCallback
 {
 private:
+	struct klvanc_context_s *vanchdl;
 	mlt_producer     m_producer;
 	IDeckLink*       m_decklink;
 	IDeckLinkInput*  m_decklinkInput;
@@ -121,6 +124,7 @@ private:
 	BMDPixelFormat   m_pixel_format;
 	int              m_colorspace;
 	int              m_vancLines;
+	int							 get_vanc;
 	// mlt_cache        m_cache;
 	bool             m_reprio;
 	mlt_position     m_last_position;
@@ -262,7 +266,7 @@ public:
 				profile = mlt_service_profile( MLT_PRODUCER_SERVICE( getProducer() ) );
 
 			// Get the display mode
-			BMDDisplayMode displayMode = getDisplayMode( profile, m_vancLines );
+			BMDDisplayMode displayMode = getDisplayMode( profile, 0 );
 			if ( displayMode == (BMDDisplayMode) bmdDisplayModeNotSupported )
 			{
 				mlt_log_info( getProducer(), "profile = %dx%d %f fps %s\n", profile->width, profile->height,
@@ -270,6 +274,7 @@ public:
 				throw "Profile is not compatible with decklink.";
 			}
 
+			mlt_properties_dump( MLT_PRODUCER_PROPERTIES( getProducer()),stderr);
 			// Determine if supports input format detection
 #ifdef _WIN32
 			BOOL doesDetectFormat = FALSE;
@@ -305,6 +310,18 @@ public:
 			m_started = m_decklinkInput->StartStreams() == S_OK;
 			if ( !m_started )
 				throw "Failed to start capture.";
+		  
+			if (klvanc_context_create(&vanchdl) < 0)
+        throw "Error initializing klvanc library context.";
+
+			klvanc_context_enable_cache(vanchdl);
+			/* We specifically want to see packets that have bad checksums. */
+			vanchdl->allow_bad_checksums = 1;
+			vanchdl->warn_on_decode_failure = 1;
+			vanchdl->verbose = 0;
+			vanchdl->callbacks = &callbacks;
+			vanchdl->callback_context =  this;
+      
 		}
 		catch ( const char *error )
 		{
@@ -337,12 +354,77 @@ public:
 		pthread_mutex_unlock( &m_mutex );
 	}
 
+static int cb_SCTE_104(void *callback_context, struct klvanc_context_s *ctx, struct klvanc_packet_scte_104_s *pkt)
+{
+	time_t tm;
+	DeckLinkProducer *obj = (DeckLinkProducer *)callback_context;
+	mlt_service service = MLT_PRODUCER_SERVICE( obj->getProducer());
+	mlt_properties producer_p =  MLT_PRODUCER_PROPERTIES(obj->getProducer());
+
+	time(&tm);
+	mlt_log_info( obj->getProducer(), "Get scte 104: %s %s\n", 
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_NORMAL ? "start normal" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE ? "start imediate" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICEEND_NORMAL ? "end normal" :
+		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICEEND_IMMEDIATE ? "end imediate" : "unknow",
+		ctime(&tm));
+
+	if (pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_NORMAL ||
+	 		pkt->mo_msg.ops->sr_data.splice_insert_type == SPLICESTART_IMMEDIATE){
+		mlt_properties_set_int(producer_p, "has_scte_104", 1);
+	}
+
+	return 0;
+}
+
+struct klvanc_callbacks_s callbacks =
+{
+	.scte_104 = cb_SCTE_104
+};
+
+void convertColorspaceAndParseVanc(unsigned char *buf, unsigned int uiWidth, unsigned int lineNr)
+{
+	/* Convert the vanc line from V210 to CrCB422, then vanc parse it */
+
+	/* We need two kinds of type pointers into the source vbi buffer */
+	/* TODO: What the hell is this, two ptrs? */
+	const uint32_t *src = (const uint32_t *)buf;
+
+	/* Convert Blackmagic pixel format to nv20.
+	 * src pointer gets mangled during conversion, hence we need its own
+	 * ptr instead of passing vbiBufferPtr */
+	uint16_t decoded_words[16384];
+	memset(&decoded_words[0], 0, sizeof(decoded_words));
+	uint16_t *p_anc = decoded_words;
+
+	if (uiWidth == 720) {
+		/* Standard definition video will have VANC spanning both
+		   Luma and Chroma channels */
+		klvanc_v210_line_to_uyvy_c(src, p_anc, uiWidth);
+	} else {
+		if (klvanc_v210_line_to_nv20_c(src, p_anc,
+					       sizeof(decoded_words),
+					       (uiWidth / 6) * 6) < 0)
+			return;
+	}
+
+	int ret = klvanc_packet_parse(vanchdl, lineNr, decoded_words, sizeof(decoded_words) / (sizeof(unsigned short)));
+
+	if (ret < 0) {
+		/* No VANC on this line */
+	}
+}
+
+
 	mlt_frame getFrame()
 	{
 		struct timeval now;
 		struct timespec tm;
 		double fps = mlt_producer_get_fps( getProducer() );
 		mlt_position position = mlt_producer_position( getProducer() );
+
+		mlt_properties producer_p =  MLT_PRODUCER_PROPERTIES(getProducer());
+		int has_scte_104 = mlt_properties_get_int(producer_p, "has_scte_104");
 		// mlt_frame frame = mlt_cache_get_frame( m_cache, position );
 
 		mlt_frame frame = (mlt_frame)mlt_deque_pop_front(m_queue);
@@ -427,6 +509,10 @@ public:
 			mlt_properties_set_int( properties, "audio_frequency", 48000 );
 			mlt_properties_set_int( properties, "audio_channels",
 				mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "channels" ) );
+			if (has_scte_104){
+				mlt_properties_set_int( properties, "meta.playcast.has_scte_104", 1);
+				mlt_properties_set_int(producer_p, "has_scte_104", 0);
+			}
 		}
 		else {
 			mlt_log_info( getProducer(), "buffer underrun\n" );
@@ -538,30 +624,18 @@ public:
 					image, image_buffers, image_strides );
 
 				// Capture VANC
-				if ( m_vancLines > 0 )
+				get_vanc = mlt_properties_get_int( MLT_PRODUCER_PROPERTIES( getProducer() ), "_get_vanc" );
+				if ( get_vanc )
 				{
 					IDeckLinkVideoFrameAncillary* vanc = 0;
 					if ( video->GetAncillaryData( &vanc ) == S_OK && vanc )
 					{
-						for ( int i = 1; i < m_vancLines + 1; i++ )
-						{
-							unsigned char* out[4] = {
-								image_buffers[0] + (i - 1) * image_strides[0],
-								image_buffers[1] + (i - 1) * image_strides[1],
-								image_buffers[2] + (i - 1) * image_strides[2],
-								image_buffers[3] + (i - 1) * image_strides[3] };
+						unsigned int uiWidth = video->GetWidth();
 
-							if ( vanc->GetBufferForVerticalBlankingLine( i, &buffer ) == S_OK )
-								copy_lines
-								(
-									m_pixel_format, (unsigned char*)buffer, video->GetRowBytes(),
-									fmt, out, image_strides,
-									video->GetWidth(), 1
-								);
-							else
-							{
-								fill_line( fmt, out, image_strides, 0 );
-								mlt_log_debug( getProducer(), "failed capture vanc line %d\n", i );
+						for ( int i = 1; i < 32 + 1; i++ )
+						{
+							if ( vanc->GetBufferForVerticalBlankingLine( i, &buffer ) == S_OK ){
+								convertColorspaceAndParseVanc((unsigned char *)buffer, uiWidth, i);
 							}
 						}
 						SAFE_RELEASE(vanc);
@@ -898,8 +972,9 @@ mlt_producer producer_decklink_init( mlt_profile profile, mlt_service_type type,
 			mlt_properties_set( properties, "resource", fresource );
 			mlt_properties_set( properties, "resource-n", resource );
 			mlt_properties_set_int( properties, "channels", 2 );
-			mlt_properties_set_int( properties, "buffer", 25 );
-			mlt_properties_set_int( properties, "prefill", 25 );
+			mlt_properties_set_int( properties, "buffer", 35 );
+			mlt_properties_set_int( properties, "prefill", 35 );
+			mlt_properties_set_int( properties, "priority", 1 );
 
 			char *e = getenv("MLT_DEFAULT_LIVE_SOURCE_LENGTH");
 			// defaults to ~24hrs at 29.97 fps
