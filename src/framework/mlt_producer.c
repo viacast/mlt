@@ -795,17 +795,20 @@ skip_run_sh:;
 	int was_current = 0;
 	char *last_watermark_id = NULL;
 	for (int i = 0; i < playlist->count; ++i) {
+		// Entries without the usual .melt structure (e.g. a clip whose file is
+		// missing loads as an empty melt_file) are skipped. Aborting here used to
+		// leave every clip after them without its watermark.
 		mlt_multitrack multitrack = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(mlt_producer_cut_parent(playlist->list[i]->producer)), "multitrack", NULL);
 		if (!multitrack || !multitrack->list || !multitrack->count) {
-			goto skip_watermark;
+			continue;
 		}
 		mlt_track track = multitrack->list[0];
 		if (!track || !track->producer) {
-			goto skip_watermark;
+			continue;
 		}
 		mlt_playlist playlist2 = mlt_properties_get_data(MLT_PRODUCER_PROPERTIES(track->producer), "playlist", NULL);
 		if (!playlist2) {
-			goto skip_watermark;
+			continue;
 		}
 
 		for (int j = 0; j < playlist2->count; ++j) {
