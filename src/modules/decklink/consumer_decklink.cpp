@@ -29,6 +29,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include "common.h"
+#include "record_tap.h"
 
 #include <DeckLinkAPI.h>
 
@@ -131,6 +132,14 @@ private:
 	BMDTimeScale                m_timescale;
 	double                      m_fps;
 	uint64_t                    m_count;
+	// Playcast recording tap (record_tap.h): enabled by the "record_tap"
+	// consumer property (shared memory name); empty disables it.
+	pctap_writer*               m_tap;
+	pthread_mutex_t             m_tap_lock;
+	uint64_t                    m_tap_last_video;
+	uint32_t                    m_tap_flags;     // PCTAP_FLAG_* of the frame being rendered
+	uint64_t                    m_late;
+	uint64_t                    m_dropped;
 	int                         m_outChannels;
 	int                         m_inChannels;
 	bool                        m_isAudio;
@@ -223,7 +232,13 @@ public:
 		pthread_mutex_init( &m_op_lock, &mta );
 		pthread_mutex_init( &m_op_arg_mutex, &mta );
 		pthread_mutex_init( &m_aqueue_lock, &mta );
+		pthread_mutex_init( &m_tap_lock, &mta );
 		pthread_mutexattr_destroy( &mta );
+		m_tap = NULL;
+		m_tap_last_video = UINT64_MAX;
+		m_tap_flags = 0;
+		m_late = 0;
+		m_dropped = 0;
 		pthread_cond_init( &m_op_arg_cond, NULL );
 		pthread_create( &m_op_thread, NULL, op_main, this );
 	}
@@ -247,6 +262,8 @@ public:
 		pthread_join(m_op_thread, NULL);
 		mlt_log_debug( getConsumer(), "%s: finished op thread\n", __FUNCTION__ );
 
+		closeTap();
+		pthread_mutex_destroy( &m_tap_lock );
 		pthread_mutex_destroy( &m_aqueue_lock );
 		pthread_mutex_destroy(&m_op_lock);
 		pthread_mutex_destroy(&m_op_arg_mutex);
@@ -570,6 +587,9 @@ protected:
 		while ( mlt_frame frame = (mlt_frame) mlt_deque_pop_back( m_aqueue ) )
 			mlt_frame_close( frame );
 		pthread_mutex_unlock( &m_aqueue_lock );
+
+		// readers see active=0; it reopens on the next render if still enabled
+		closeTap();
 
 		m_buffer = NULL;
 		IDeckLinkMutableVideoFrame* frame;
@@ -986,6 +1006,8 @@ exit_scte104:
 						arg[2] = (unsigned char*)size;
 						mlt_slices_run_fifo( 0, swab_sliced, arg);
 					}
+					// exactly the UYVY image handed to the card
+					tapVideo( m_buffer );
 				}
 				else if ( !mlt_properties_get_int( MLT_FRAME_PROPERTIES( frame ), "test_image" ) )
 				{
@@ -1085,6 +1107,65 @@ exit_scte104:
 		}
 	}
 
+	void closeTap()
+	{
+		pthread_mutex_lock( &m_tap_lock );
+		if ( m_tap )
+		{
+			mlt_log_info( getConsumer(), "record tap '%s' closed\n", pctap_name( m_tap ) );
+			pctap_close( m_tap );
+			m_tap = NULL;
+		}
+		pthread_mutex_unlock( &m_tap_lock );
+	}
+
+	// Opens/closes the tap to follow the "record_tap" property, which can be
+	// changed at any time (melted: USET U<n> consumer.record_tap=<name>).
+	void updateTap()
+	{
+		const char *name = mlt_properties_get( MLT_CONSUMER_PROPERTIES( getConsumer() ), "record_tap" );
+		int wanted = name && *name && strcmp( name, "0" );
+		pthread_mutex_lock( &m_tap_lock );
+		if ( m_tap && ( !wanted || strcmp( pctap_name( m_tap ), name[0] == '/' ? name + 1 : name ) ) )
+		{
+			mlt_log_info( getConsumer(), "record tap '%s' closed\n", pctap_name( m_tap ) );
+			pctap_close( m_tap );
+			m_tap = NULL;
+		}
+		if ( wanted && !m_tap && !m_isKeyer )
+		{
+			mlt_profile profile = mlt_service_profile( MLT_CONSUMER_SERVICE( getConsumer() ) );
+			m_tap = pctap_open( name, m_width, m_height, (int) m_timescale, (int) m_duration,
+				profile ? profile->progressive : 0, 1, bmdAudioSampleRate48kHz, m_outChannels );
+			if ( m_tap )
+				mlt_log_info( getConsumer(), "record tap '%s' opened (%dx%d, %d audio channels)\n",
+					name, m_width, m_height, m_outChannels );
+			else
+				mlt_log_error( getConsumer(), "failed to open record tap '%s'\n", name );
+		}
+		pthread_mutex_unlock( &m_tap_lock );
+	}
+
+	void tapVideo( const uint8_t *image )
+	{
+		pthread_mutex_lock( &m_tap_lock );
+		if ( m_tap )
+		{
+			pctap_write_video( m_tap, m_count, image, !image, m_tap_flags );
+			pctap_set_counters( m_tap, m_late, m_dropped );
+			m_tap_last_video = m_count;
+		}
+		pthread_mutex_unlock( &m_tap_lock );
+	}
+
+	void tapAudio( uint64_t frame, const int16_t *pcm, int samples )
+	{
+		pthread_mutex_lock( &m_tap_lock );
+		if ( m_tap )
+			pctap_write_audio( m_tap, frame, pcm, samples, m_outChannels );
+		pthread_mutex_unlock( &m_tap_lock );
+	}
+
 	HRESULT render( mlt_frame frame )
 	{
 		HRESULT result = S_OK;
@@ -1096,7 +1177,13 @@ exit_scte104:
 			renderAudio( frame );
 
 		// Get the video
+		updateTap();
+		// audio only goes to the card at normal speed (see above)
+		m_tap_flags = ( m_isAudio && speed == 1.0 ) ? 0 : PCTAP_FLAG_NO_AUDIO;
 		renderVideo( frame );
+		// not rendered: the card repeats the previous image, so does the recording
+		if ( m_tap && m_tap_last_video != m_count )
+			tapVideo( NULL );
 		++m_count;
 
 		return result;
@@ -1236,6 +1323,9 @@ exit_scte104:
 				if ( written != (uint32_t) samples )
 					mlt_log_verbose( getConsumer(), "renderAudio: samples=%d, written=" DECKLINK_UNSIGNED_FORMAT "\n", samples, written );
 
+				// same samples, same frame number as scheduled on the card
+				tapAudio( m_count, pcm, samples );
+
 				mlt_pool_release( outBuff );
 			}
 			else
@@ -1281,10 +1371,12 @@ exit_scte104:
 		if ( bmdOutputFrameDisplayedLate == completed )
 		{
 			mlt_log_verbose( getConsumer(), "ScheduledFrameCompleted: bmdOutputFrameDisplayedLate == completed\n" );
+			m_late++;
 		}
 		if ( bmdOutputFrameDropped == completed )
 		{
 			mlt_log_verbose( getConsumer(), "ScheduledFrameCompleted: bmdOutputFrameDropped == completed\n" );
+			m_dropped++;
 			m_count++;
 			ScheduleNextFrame( false );
 		}

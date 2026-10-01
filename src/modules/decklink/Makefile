@@ -1,6 +1,6 @@
 CFLAGS += -I../..
 
-LDFLAGS += -L../../framework -lmlt -lpthread -lklvanc
+LDFLAGS += -L../../framework -lmlt -lpthread -lklvanc -lrt
 
 include ../../../config.mak
 
@@ -8,7 +8,8 @@ TARGET = ../libmltdecklink$(LIBSUF)
 
 OBJS = consumer_decklink.o \
 	producer_decklink.o \
-	common.o
+	common.o \
+	record_tap.o
 
 ifeq ($(targetos), MinGW)
 CFLAGS += -Iwin
