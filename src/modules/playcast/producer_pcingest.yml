@@ -1,0 +1,22 @@
+schema_version: 0.1
+type: producer
+identifier: pcingest
+title: Playcast live ingest
+version: 1
+copyright: Viacast
+license: LGPLv2.1
+language: en
+tags:
+  - Audio
+  - Video
+description: >
+  A live network source (SRT, RTMP, ...) received by playcast-live-gateway,
+  read from its shared-memory ring (/dev/shm/<name>). Never blocks: repeats
+  the last frame when nothing new arrived and gives black and silence when
+  the gateway isn't there.
+parameters:
+  - identifier: resource
+    argument: yes
+    title: Ring name
+    type: string
+    required: yes

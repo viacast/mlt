@@ -1,0 +1,8 @@
+#!/bin/sh
+
+if [ "$help" != "1" ]
+then
+	echo > config.mak
+fi
+
+exit 0
